@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Credentials
+credentials.json
+
+# Coverage directory
+coverage/
+
+# Temporary files
+.tmp/
+.DS_Store
+
+# MongoDB data
+data/
+
+# Cloudinary uploads
+uploads/
+
+# Build output
+dist/
+build/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
