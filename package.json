@@ -21,6 +21,7 @@
     "@google-cloud/speech": "^6.3.0",
     "@google-cloud/text-to-speech": "^5.8.1",
     "@google/generative-ai": "^0.24.0",
+    "@pinecone-database/pinecone": "^5.1.1",
     "cloudinary": "^2.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
