@@ -14,6 +14,7 @@
         }
         .recording-pulse {
             animation: pulse 1.5s infinite;
+            color: #f87171 !important; /* Red color when recording */
         }
         @keyframes pulse {
             0% {
@@ -28,6 +29,23 @@
                 transform: scale(1);
                 opacity: 1;
             }
+        }
+
+        .recording-indicator {
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #f87171;
+            font-size: 12px;
+            white-space: nowrap;
+            animation: fadeInOut 1.5s infinite;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
         }
         .gradient-text {
             background: linear-gradient(90deg, #8ab4f8 0%, #f28b82 100%);
@@ -184,6 +202,25 @@
         @media (max-width: 768px) {
             .sidebar {
                 display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100%;
+                z-index: 50;
+                width: 80% !important; /* Override collapsed/expanded width */
+                max-width: 300px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            }
+
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: 40;
             }
 
             .desktop-header {
@@ -207,6 +244,15 @@
             .options-button {
                 display: block;
             }
+
+            /* Always show expanded content on mobile */
+            .sidebar .sidebar-expanded-content {
+                display: block;
+            }
+
+            .sidebar .sidebar-collapsed-content {
+                display: none;
+            }
         }
 
         /* Desktop Styles */
@@ -226,6 +272,8 @@
     </style>
 </head>
 <body class="flex h-screen overflow-hidden">
+    <!-- Sidebar overlay for mobile -->
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
     <!-- Left Sidebar - Toggleable between t1 and t2 styles -->
     <div id="sidebar" class="sidebar collapsed bg-gray-900 flex flex-col py-4 px-2">
         <!-- Toggle Button -->
@@ -402,9 +450,12 @@
                         <button id="sendButton" class="p-2 text-gray-400 hover:text-gray-300">
                             <i class="fas fa-paper-plane"></i>
                         </button>
-                        <button id="recordButton" class="p-2 text-gray-400 hover:text-gray-300">
-                            <i class="fas fa-microphone"></i>
-                        </button>
+                        <div class="relative">
+                            <button id="recordButton" class="p-2 text-gray-400 hover:text-gray-300">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                            <div id="recordingIndicator" class="recording-indicator hidden">Recording...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -416,26 +467,97 @@
     </div>
 
     <script>
-        // Toggle sidebar between collapsed (t1) and expanded (t2) states
+        // Toggle sidebar between collapsed (t1) and expanded (t2) states on desktop
+        // or show/hide on mobile
         document.getElementById('toggleSidebar').addEventListener('click', () => {
             const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('expanded');
-            sidebar.classList.toggle('collapsed');
+            const overlay = document.getElementById('sidebarOverlay');
+
+            // Check if we're on mobile
+            if (window.innerWidth < 769) {
+                // Mobile behavior - toggle visibility
+                if (sidebar.style.display === 'none' || sidebar.style.display === '') {
+                    // Show sidebar
+                    sidebar.style.display = 'flex';
+                    sidebar.classList.add('expanded');
+                    sidebar.classList.remove('collapsed');
+                    overlay.style.display = 'block';
+                    sidebar.style.animation = 'slideIn 0.3s forwards';
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    // Hide sidebar
+                    closeMobileSidebar();
+                }
+            } else {
+                // Desktop behavior - toggle expanded/collapsed
+                sidebar.classList.toggle('expanded');
+                sidebar.classList.toggle('collapsed');
+            }
         });
 
-        // Mobile menu toggle
+        // Define the animation in a style tag if it doesn't exist
+        if (!document.getElementById('sidebarAnimation')) {
+            const style = document.createElement('style');
+            style.id = 'sidebarAnimation';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(-100%); }
+                    to { transform: translateX(0); }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); }
+                    to { transform: translateX(-100%); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Mobile menu toggle - use the same toggle function
         document.getElementById('mobileMenuToggle').addEventListener('click', () => {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.style.display = sidebar.style.display === 'none' || sidebar.style.display === '' ? 'flex' : 'none';
+            // Trigger the same function as toggleSidebar
+            document.getElementById('toggleSidebar').click();
         });
+
+        // Close sidebar when clicking on overlay
+        document.getElementById('sidebarOverlay').addEventListener('click', closeMobileSidebar);
+
+        // Function to close mobile sidebar
+        function closeMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+
+            // Add slide out animation
+            sidebar.style.animation = 'slideOut 0.3s forwards';
+
+            // Hide overlay immediately
+            overlay.style.display = 'none';
+
+            // Wait for animation to complete before hiding sidebar
+            setTimeout(() => {
+                sidebar.style.display = 'none';
+                // Reset animation
+                sidebar.style.animation = '';
+            }, 300);
+
+            // Restore body scrolling
+            document.body.style.overflow = '';
+        }
 
         // Handle window resize for responsive design
         window.addEventListener('resize', () => {
             const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+
             if (window.innerWidth >= 769) {
+                // Desktop view
                 sidebar.style.display = 'flex';
+                overlay.style.display = 'none';
+                document.body.style.overflow = '';
             } else {
+                // Mobile view - hide sidebar and overlay
                 sidebar.style.display = 'none';
+                overlay.style.display = 'none';
+                document.body.style.overflow = '';
             }
         });
 
@@ -692,11 +814,17 @@
 
             // Handle record button click
             recordButton.addEventListener('click', async () => {
+                const recordingIndicator = document.getElementById('recordingIndicator');
+
                 if (isRecording) {
                     // Stop recording
                     mediaRecorder.stop();
                     recordButton.classList.remove('recording-pulse');
+                    recordingIndicator.classList.add('hidden');
                     isRecording = false;
+
+                    // Change the microphone icon back to normal
+                    recordButton.querySelector('i').className = 'fas fa-microphone';
                 } else {
                     // Start recording
                     try {
@@ -713,7 +841,7 @@
                                 // Show transcribing indicator
                                 const transcribingMsg = document.createElement('div');
                                 transcribingMsg.className = 'max-w-3xl mx-auto mb-6 text-center text-gray-400';
-                                transcribingMsg.innerHTML = '<div class="inline-block animate-pulse">Transcribing audio...</div>';
+                                transcribingMsg.innerHTML = '<div class="inline-flex items-center"><i class="fas fa-cog fa-spin mr-2"></i> Transcribing audio...</div>';
                                 chatDisplay.appendChild(transcribingMsg);
 
                                 // Create audio blob
@@ -787,7 +915,11 @@
                         // Start recording
                         mediaRecorder.start();
                         recordButton.classList.add('recording-pulse');
+                        recordingIndicator.classList.remove('hidden');
                         isRecording = true;
+
+                        // Change the microphone icon to indicate recording
+                        recordButton.querySelector('i').className = 'fas fa-microphone-alt';
                     } catch (error) {
                         console.error('Error accessing microphone:', error);
                         addMessage('Error accessing microphone. Please make sure you have granted permission to use the microphone.');
