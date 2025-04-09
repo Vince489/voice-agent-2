@@ -12,80 +12,175 @@
  */
 function htmlToText(html) {
   try {
-    // Simple regex-based HTML to text conversion
-    // Remove scripts and stylesheets first
-    let text = html
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+    // Check if HTML is valid
+    if (!html || typeof html !== 'string') {
+      return '';
+    }
 
-    // Remove HTML tags and decode entities
+    // Remove comments first
+    let text = html.replace(/<!--[\s\S]*?-->/g, '');
+
+    // Remove scripts and stylesheets
     text = text
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+      .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '');
+
+    // Try to extract main content areas first
+    const mainContentRegexes = [
+      /<main\b[^>]*>([\s\S]*?)<\/main>/gi,
+      /<article\b[^>]*>([\s\S]*?)<\/article>/gi,
+      /<div\b[^>]*content[^>]*>([\s\S]*?)<\/div>/gi,
+      /<div\b[^>]*main[^>]*>([\s\S]*?)<\/div>/gi
+    ];
+
+    let mainContent = '';
+    for (const regex of mainContentRegexes) {
+      const matches = [...text.matchAll(regex)];
+      if (matches.length > 0) {
+        // Use the longest match as it's likely the main content
+        const longestMatch = matches.reduce((longest, match) =>
+          (match[1].length > longest.length) ? match[1] : longest, '');
+
+        if (longestMatch.length > 200) { // Only use if it's substantial
+          mainContent = longestMatch;
+          break;
+        }
+      }
+    }
+
+    // If we found main content, use that, otherwise use the whole document
+    const contentToProcess = mainContent || text;
+
+    // Remove remaining HTML tags and decode entities
+    let cleanText = contentToProcess
+      .replace(/<head\b[^<]*(?:(?!<\/head>)<[^<]*)*<\/head>/gi, '')
+      .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
+      .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
+      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
+      .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, '')
       .replace(/<[^>]*>/g, ' ')
       .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+      .replace(/&#39;/g, "'")
+      .replace(/&[a-zA-Z0-9]+;/g, ' '); // Replace other entities
 
     // Clean up whitespace
-    text = text
+    cleanText = cleanText
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    return text;
+    // Limit the length to avoid excessive content
+    const maxLength = 2000;
+    if (cleanText.length > maxLength) {
+      cleanText = cleanText.substring(0, maxLength) + '...';
+    }
+
+    return cleanText;
   } catch (error) {
     console.error('Error converting HTML to text:', error);
     // Fallback to a simple HTML tag removal
-    return html.replace(/<[^>]*>/g, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
+    try {
+      return html.replace(/<[^>]*>/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+        .substring(0, 1000) + '...';
+    } catch (e) {
+      return 'Error extracting text from HTML';
+    }
   }
 }
 
 /**
- * Get URLs from search results using SearXNG
+ * Get URLs from search results using multiple search engines
  * @param {string} query - The search query
  * @returns {Promise<string[]>} - Array of URLs from search results
  */
 async function getNewsUrls(query) {
-  // Try a different public SearXNG instance
-  const searchUrl = `https://search.mdosch.de/search?q=${encodeURIComponent(query)}&format=json`;
-
-  try {
-    console.log(`Searching using: ${searchUrl}`);
-    const searchResults = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+  // List of search engines to try in order
+  const searchEngines = [
+    {
+      name: 'SearXNG (mdosch.de)',
+      url: `https://search.mdosch.de/search?q=${encodeURIComponent(query)}&format=json`,
+      parser: async (response) => {
+        const data = await response.json();
+        return data.results ? data.results.map(result => result.url) : [];
       }
-    });
-
-    if (!searchResults.ok) {
-      throw new Error(`SearXNG API returned status: ${searchResults.status}`);
+    },
+    {
+      name: 'SearXNG (search.disroot.org)',
+      url: `https://search.disroot.org/search?q=${encodeURIComponent(query)}&format=json`,
+      parser: async (response) => {
+        const data = await response.json();
+        return data.results ? data.results.map(result => result.url) : [];
+      }
+    },
+    {
+      name: 'DuckDuckGo API',
+      url: `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`,
+      parser: async (response) => {
+        const data = await response.json();
+        // Extract URLs from DuckDuckGo results
+        const urls = [];
+        if (data.AbstractURL) urls.push(data.AbstractURL);
+        if (data.Results) {
+          data.Results.forEach(result => {
+            if (result.FirstURL) urls.push(result.FirstURL);
+          });
+        }
+        return urls;
+      }
     }
+  ];
 
-    const searchResultsJson = await searchResults.json();
+  // Try each search engine in sequence until we get results
+  for (const engine of searchEngines) {
+    try {
+      console.log(`Searching using: ${engine.name}`);
+      const controller = new AbortController();
+      const signal = controller.signal;
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-    if (!searchResultsJson.results || searchResultsJson.results.length === 0) {
-      console.log('No search results found');
-      return await getFallbackUrls(query);
+      const searchResults = await fetch(engine.url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        },
+        signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!searchResults.ok) {
+        console.log(`${engine.name} returned status: ${searchResults.status}`);
+        continue; // Try the next engine
+      }
+
+      const urls = await engine.parser(searchResults);
+
+      if (urls && urls.length > 0) {
+        // Take the first 5 URLs
+        const limitedUrls = urls.slice(0, 5);
+        console.log(`Found ${limitedUrls.length} URLs from ${engine.name}`);
+        return limitedUrls;
+      }
+
+      console.log(`No results from ${engine.name}`);
+    } catch (error) {
+      console.error(`Error with ${engine.name}:`, error);
+      // Continue to the next engine
     }
-
-    // Extract URLs from the results and take the first 5
-    const urls = searchResultsJson.results
-      .map(result => result.url)
-      .slice(0, 5);
-
-    console.log(`Found ${urls.length} URLs from search results`);
-    return urls;
-  } catch (error) {
-    console.error('Error getting news URLs:', error);
-    return await getFallbackUrls(query);
   }
+
+  // If all search engines fail, use fallback URLs
+  console.log('All search engines failed, using fallback URLs');
+  return await getFallbackUrls(query);
 }
 
 /**
- * Get fallback URLs when SearXNG is not available
+ * Get fallback URLs when search engines are not available
  * @param {string} query - The search query
  * @returns {Promise<string[]>} - Array of fallback URLs
  */
@@ -96,9 +191,22 @@ async function getFallbackUrls(query) {
   try {
     // Encode the query for use in a URL
     const encodedQuery = encodeURIComponent(query);
+    const lowerQuery = query.toLowerCase();
 
-    // Create URLs based on the query topic
-    if (query.toLowerCase().includes('spacex') || query.toLowerCase().includes('space x')) {
+    // Check for specific topics and provide targeted URLs
+
+    // Virtron Boxing Club
+    if (lowerQuery.includes('virtron') && (lowerQuery.includes('boxing') || lowerQuery.includes('box'))) {
+      return [
+        'https://virtronboxing.club/about',
+        'https://www.youtube.com/@virtronboxingclub',
+        'https://twitter.com/search?q=virtron%20boxing%20club',
+        'https://www.facebook.com/search/top?q=virtron%20boxing%20club',
+        'https://www.instagram.com/explore/tags/virtronboxingclub/'
+      ];
+    }
+    // SpaceX
+    else if (lowerQuery.includes('spacex') || lowerQuery.includes('space x')) {
       return [
         'https://www.spacex.com/updates/',
         'https://en.wikipedia.org/wiki/SpaceX',
@@ -106,9 +214,11 @@ async function getFallbackUrls(query) {
         'https://www.space.com/spacex',
         'https://twitter.com/SpaceX'
       ];
-    } else if (query.toLowerCase().includes('ai') ||
-              query.toLowerCase().includes('artificial intelligence') ||
-              query.toLowerCase().includes('machine learning')) {
+    }
+    // AI/Machine Learning
+    else if (lowerQuery.includes('ai') ||
+             lowerQuery.includes('artificial intelligence') ||
+             lowerQuery.includes('machine learning')) {
       return [
         'https://en.wikipedia.org/wiki/Artificial_intelligence',
         'https://www.technologyreview.com/topic/artificial-intelligence/',
@@ -116,8 +226,22 @@ async function getFallbackUrls(query) {
         'https://www.wired.com/tag/artificial-intelligence/',
         'https://www.sciencedaily.com/news/computers_math/artificial_intelligence/'
       ];
-    } else {
-      // For other topics, use a mix of general news and information sites
+    }
+    // News/Current Events
+    else if (lowerQuery.includes('news') ||
+             lowerQuery.includes('current events') ||
+             lowerQuery.includes('latest') ||
+             lowerQuery.includes('today')) {
+      return [
+        'https://www.reuters.com/',
+        'https://www.bbc.com/news',
+        'https://www.aljazeera.com/',
+        'https://apnews.com/',
+        'https://www.npr.org/sections/news/'
+      ];
+    }
+    // For other topics, use a mix of general search and information sites
+    else {
       return [
         `https://en.wikipedia.org/wiki/Special:Search?search=${encodedQuery}`,
         `https://www.reuters.com/search/news?blob=${encodedQuery}`,
@@ -131,49 +255,140 @@ async function getFallbackUrls(query) {
 
     // Default fallback URLs if everything else fails
     return [
-      'https://duckduckgo.com/',
-      'https://www.technologyreview.com/topic/artificial-intelligence/',
-      'https://www.nature.com/articles/d41586-023-00107-z',
-      'https://www.wired.com/tag/artificial-intelligence/',
-      'https://www.sciencedaily.com/news/computers_math/artificial_intelligence/'
+      'https://en.wikipedia.org/wiki/Main_Page',
+      'https://www.reuters.com/',
+      'https://www.bbc.com/news',
+      'https://www.aljazeera.com/',
+      'https://apnews.com/'
     ];
   }
 }
 
 /**
+ * Fetch and clean text from a single URL
+ * @param {string} url - URL to fetch content from
+ * @returns {Promise<string|null>} - Cleaned text with source information or null if failed
+ */
+async function fetchAndCleanText(url) {
+  try {
+    console.log(`Fetching ${url}`);
+
+    // Set a timeout for the fetch operation
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+    const getUrl = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!getUrl.ok) {
+      throw new Error(`Failed to fetch ${url}: ${getUrl.status}`);
+    }
+
+    const html = await getUrl.text();
+
+    // Extract title if possible
+    let title = '';
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (titleMatch && titleMatch[1]) {
+      title = titleMatch[1].trim();
+    }
+
+    const text = htmlToText(html);
+
+    // Only return if we have meaningful content (more than just a few words)
+    if (!text || text.trim().split(/\s+/).length < 5) {
+      console.log(`Not enough meaningful content from ${url}`);
+      return null;
+    }
+
+    // Add the source URL, title, and the cleaned text to the results
+    return `Source: ${url}\n${title ? 'Title: ' + title + '\n' : ''}${text}\n\n`;
+  } catch (error) {
+    console.error(`Error processing ${url}:`, error);
+    return null; // Return null for failed fetches
+  }
+}
+
+/**
  * Fetch and clean text from a list of URLs
- * @param {string[]} urls - Array of URLs to fetch content from
+ * @param {string|string[]} urls - URL or array of URLs to fetch content from
  * @returns {Promise<string[]>} - Array of cleaned texts with source information
  */
 async function getCleanedText(urls) {
-  const texts = [];
-
-  for (const url of urls) {
-    try {
-      console.log(`Fetching ${url}`);
-      const getUrl = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-
-      if (!getUrl.ok) {
-        console.error(`Failed to fetch ${url}: ${getUrl.status}`);
-        continue;
-      }
-
-      const html = await getUrl.text();
-      const text = htmlToText(html);
-
-      // Add the source URL and the cleaned text to the results
-      texts.push(`Source: ${url}\n${text}\n\n`);
-    } catch (error) {
-      console.error(`Error processing ${url}:`, error);
-    }
+  // If a single URL is passed, convert it to an array
+  if (typeof urls === 'string') {
+    urls = [urls];
   }
+
+  // Use Promise.allSettled to handle all promises regardless of success/failure
+  const results = await Promise.allSettled(
+    urls.map(url => fetchAndCleanText(url))
+  );
+
+  // Filter out failed fetches and extract values from fulfilled promises
+  const texts = results
+    .filter(result => result.status === 'fulfilled' && result.value)
+    .map(result => result.value);
 
   return texts;
 }
+
+// Simple in-memory cache for search results
+const cache = {
+  searches: new Map(), // Map of query -> {timestamp, results}
+  content: new Map(),  // Map of url -> {timestamp, content}
+  // Cache expiration time (30 minutes)
+  EXPIRATION_MS: 30 * 60 * 1000,
+
+  // Get cached search results if available and not expired
+  getSearch(query) {
+    const normalizedQuery = query.toLowerCase().trim();
+    const cached = this.searches.get(normalizedQuery);
+
+    if (cached && (Date.now() - cached.timestamp < this.EXPIRATION_MS)) {
+      console.log(`Using cached search results for: ${normalizedQuery}`);
+      return cached.results;
+    }
+
+    return null;
+  },
+
+  // Save search results to cache
+  saveSearch(query, results) {
+    const normalizedQuery = query.toLowerCase().trim();
+    this.searches.set(normalizedQuery, {
+      timestamp: Date.now(),
+      results
+    });
+  },
+
+  // Get cached content if available and not expired
+  getContent(url) {
+    const cached = this.content.get(url);
+
+    if (cached && (Date.now() - cached.timestamp < this.EXPIRATION_MS)) {
+      console.log(`Using cached content for: ${url}`);
+      return cached.content;
+    }
+
+    return null;
+  },
+
+  // Save content to cache
+  saveContent(url, content) {
+    this.content.set(url, {
+      timestamp: Date.now(),
+      content
+    });
+  }
+};
 
 /**
  * Perform an enhanced search that returns both search results and content from top results
@@ -182,27 +397,65 @@ async function getCleanedText(urls) {
  */
 async function performEnhancedSearch(query) {
   try {
+    // Check cache first
+    const cachedResults = cache.getSearch(query);
+    if (cachedResults) {
+      return cachedResults;
+    }
+
     // Get URLs from search results
     const urls = await getNewsUrls(query);
 
     if (urls.length === 0) {
-      return {
+      const emptyResult = {
         query,
         results: [],
         content: [],
         error: 'No search results found'
       };
+      return emptyResult;
     }
 
-    // Fetch and clean content from the URLs
-    const content = await getCleanedText(urls);
+    // Check if we have any cached content for these URLs
+    const urlsToFetch = [];
+    const cachedContent = [];
 
-    return {
+    for (const url of urls) {
+      const cached = cache.getContent(url);
+      if (cached) {
+        cachedContent.push(cached);
+      } else {
+        urlsToFetch.push(url);
+      }
+    }
+
+    // Fetch only the content we don't have cached
+    let newContent = [];
+    if (urlsToFetch.length > 0) {
+      newContent = await getCleanedText(urlsToFetch);
+
+      // Cache the new content
+      for (let i = 0; i < urlsToFetch.length && i < newContent.length; i++) {
+        if (newContent[i] && newContent[i].trim().length > 0) {
+          cache.saveContent(urlsToFetch[i], newContent[i]);
+        }
+      }
+    }
+
+    // Combine cached and new content
+    const allContent = [...cachedContent, ...newContent];
+
+    const results = {
       query,
       results: urls.map(url => ({ url })),
-      content,
+      content: allContent,
       number_of_results: urls.length
     };
+
+    // Cache the search results
+    cache.saveSearch(query, results);
+
+    return results;
   } catch (error) {
     console.error('Error performing enhanced search:', error);
     return {
