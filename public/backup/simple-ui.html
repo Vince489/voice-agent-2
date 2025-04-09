@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Agent</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .chat-container {
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .chat-header {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .message {
+            margin-bottom: 15px;
+            max-width: 80%;
+        }
+        .assistant-message {
+            background-color: #e3f2fd;
+            color: #000;
+            padding: 10px 15px;
+            border-radius: 18px;
+            display: inline-block;
+        }
+        .user-message {
+            background-color: #4285f4;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 18px;
+            margin-left: auto;
+            display: inline-block;
+        }
+        .input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .message-input {
+            flex: 1;
+            border: 1px solid #d1d5db;
+            border-radius: 20px;
+            padding: 8px 15px;
+            outline: none;
+        }
+        .send-button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 15px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+        .mic-button {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px auto;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        .recording-pulse {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 0.7;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        .footer-text {
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Voice Agent</h1>
+            <p class="text-gray-600">Talk to your AI assistant</p>
+        </header>
+
+        <div class="chat-container">
+            <!-- Chat Messages -->
+            <div id="chatDisplay" class="chat-messages">
+                <div class="message">
+                    <div class="assistant-message">
+                        Hello! I'm your voice assistant. How can I help you today?
+                    </div>
+                </div>
+                <!-- Messages will be added here dynamically -->
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+                <input 
+                    id="textInput" 
+                    type="text" 
+                    placeholder="Type a message..." 
+                    class="message-input"
+                >
+                <button 
+                    id="sendButton" 
+                    class="send-button"
+                >
+                    Send
+                </button>
+            </div>
+
+            <!-- Microphone Button -->
+            <button 
+                id="recordButton" 
+                class="mic-button"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </button>
+
+            <p class="footer-text">
+                Click the microphone button to start recording, or type your message and press send.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatDisplay = document.getElementById('chatDisplay');
+            const textInput = document.getElementById('textInput');
+            const sendButton = document.getElementById('sendButton');
+            const recordButton = document.getElementById('recordButton');
+
+            let mediaRecorder;
+            let audioChunks = [];
+            let isRecording = false;
+
+            // Add a message to the chat display
+            function addMessage(text, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+
+                const messageContent = document.createElement('div');
+                messageContent.className = isUser ? 'user-message' : 'assistant-message';
+                messageContent.textContent = text;
+
+                messageDiv.appendChild(messageContent);
+                chatDisplay.appendChild(messageDiv);
+
+                // Scroll to bottom
+                chatDisplay.scrollTop = chatDisplay.scrollHeight;
+            }
+
+            // Send a text message
+            async function sendTextMessage(text) {
+                if (!text.trim()) return;
+
+                // Add user message to chat
+                addMessage(text, true);
+
+                try {
+                    // Send message to the agent
+                    const response = await fetch('/api/agent/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: text,
+                            context: { generateSpeech: true }
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // Add agent response to chat
+                    addMessage(data.text);
+
+                    // Play audio if available
+                    if (data.audioUrl) {
+                        console.log('Playing audio response');
+                        const audio = new Audio(data.audioUrl);
+                        audio.play().catch(error => {
+                            console.error('Error playing audio:', error);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    addMessage('Sorry, I encountered an error processing your request.');
+                }
+            }
+
+            // Handle send button click
+            sendButton.addEventListener('click', () => {
+                const text = textInput.value;
+                sendTextMessage(text);
+                textInput.value = '';
+            });
+
+            // Handle enter key in text input
+            textInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const text = textInput.value;
+                    sendTextMessage(text);
+                    textInput.value = '';
+                }
+            });
+
+            // Handle record button click
+            recordButton.addEventListener('click', async () => {
+                if (isRecording) {
+                    // Stop recording
+                    mediaRecorder.stop();
+                    recordButton.classList.remove('recording-pulse');
+                    isRecording = false;
+                } else {
+                    // Start recording
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+
+                        mediaRecorder.addEventListener('dataavailable', (event) => {
+                            audioChunks.push(event.data);
+                        });
+
+                        mediaRecorder.addEventListener('stop', async () => {
+                            // Create audio blob
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+
+                            // Create form data
+                            const formData = new FormData();
+                            formData.append('audio', audioBlob);
+
+                            try {
+                                // Transcribe audio
+                                const transcribeResponse = await fetch('/api/transcribe', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+
+                                const transcribeData = await transcribeResponse.json();
+
+                                if (transcribeData.text) {
+                                    // Add transcription to chat
+                                    addMessage(transcribeData.text, true);
+
+                                    // Process with agent
+                                    const agentResponse = await fetch('/api/agent/voice', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({
+                                            transcription: transcribeData.text,
+                                            context: { generateSpeech: true }
+                                        })
+                                    });
+
+                                    const agentData = await agentResponse.json();
+
+                                    // Add agent response to chat
+                                    addMessage(agentData.text);
+
+                                    // Play audio if available
+                                    if (agentData.audioUrl) {
+                                        console.log('Playing audio response');
+                                        const audio = new Audio(agentData.audioUrl);
+                                        audio.play().catch(error => {
+                                            console.error('Error playing audio:', error);
+                                        });
+                                    }
+                                } else {
+                                    addMessage("I couldn't understand what you said. Please try again.");
+                                }
+                            } catch (error) {
+                                console.error('Error processing voice:', error);
+                                addMessage('Sorry, I encountered an error processing your voice input.');
+                            }
+
+                            // Stop all tracks
+                            stream.getTracks().forEach(track => track.stop());
+                        });
+
+                        // Start recording
+                        mediaRecorder.start();
+                        recordButton.classList.add('recording-pulse');
+                        isRecording = true;
+                    } catch (error) {
+                        console.error('Error accessing microphone:', error);
+                        addMessage('Error accessing microphone. Please make sure you have granted permission to use the microphone.');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

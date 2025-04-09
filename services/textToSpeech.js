@@ -23,7 +23,7 @@ export const DEFAULT_VOICE_SETTINGS = {
   voiceName: 'en-US-Chirp3-HD-Zephyr',
   ssmlGender: 'NEUTRAL',
   audioEncoding: 'MP3',
-  speakingRate: 1.03,
+  speakingRate: 0.90,
   pitch: 0.0,
   effectsProfileId: ['small-bluetooth-speaker-class-device'] // Optimize for faster processing
 };

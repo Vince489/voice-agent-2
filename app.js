@@ -37,7 +37,7 @@ process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
 
 // Create Express app
 const app = express();
-const PORT = process.env.PORT || 3078;
+const PORT = process.env.PORT || 3080; // Changed port to 3080
 
 // Directory name is already defined above
 
@@ -64,9 +64,23 @@ app.use('/api/transcribe', transcribeRoutes);
 app.use('/api/speak', speakRoutes);
 app.use('/api/agent', agentRoutes);
 
-// Root route - serve the main HTML page
+// Root route - serve the main HTML page (Virtra UI)
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Backup route for accessing the original example-ui.html
+app.get('/example', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'example-ui.html'));
+});
+
+// Routes for accessing backup UIs
+app.get('/backup/simple', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'backup', 'simple-ui.html'));
+});
+
+app.get('/backup/original', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'backup', 'index.html'));
 });
 
 // Start the server
