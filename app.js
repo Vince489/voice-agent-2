@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import transcribeRoutes from './routes/transcribe.js';
 import speakRoutes from './routes/speak.js';
 import agentRoutes from './routes/agent.js';
+import imageRoutes from './routes/image.js';
 
 // Load environment variables
 dotenv.config();
@@ -63,6 +64,7 @@ if (mongoUri) {
 app.use('/api/transcribe', transcribeRoutes);
 app.use('/api/speak', speakRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/image', imageRoutes);
 
 // Root route - serve the main HTML page (Virtra UI)
 app.get('/', (_req, res) => {

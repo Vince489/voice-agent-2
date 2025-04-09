@@ -125,6 +125,19 @@ function parseToolCall(text) {
     }
   }
 
+  // Also check for internet search requests in a more flexible format
+  // This helps catch cases where the model doesn't use the exact JSON format
+  const searchRegex = /(?:search|look up|find information about|search for)\s+["'](.+?)["']/i;
+  const searchMatch = text.match(searchRegex);
+
+  if (searchMatch && searchMatch[1]) {
+    console.log(`Detected search request: ${searchMatch[1]}`);
+    return {
+      name: "internet_search",
+      arguments: { query: searchMatch[1] }
+    };
+  }
+
   return null;
 }
 
@@ -169,8 +182,26 @@ export async function processMessage(message, context = {}) {
       const toolResult = await executeTool(toolCall.name, toolCall.arguments || {});
       console.log('Tool result:', toolResult);
 
-      // Send the tool result back to the LLM
-      const toolResultMessage = `Tool Result:\n\`\`\`json\n${JSON.stringify(toolResult)}\n\`\`\`\n\nBased on this result, please provide a response to the user's message: "${message}"`;
+      // Format the tool result message based on the tool type
+      let toolResultMessage;
+
+      if (toolCall.name === 'internet_search') {
+        // Format internet search results in a more readable way
+        if (toolResult.error) {
+          toolResultMessage = `Internet Search Error: ${toolResult.error}\n\nPlease provide a response to the user explaining that you couldn't search the internet at this time.`;
+        } else if (toolResult.results && toolResult.results.length > 0) {
+          const formattedResults = toolResult.results.map((result, index) => {
+            return `Result ${index + 1}:\nTitle: ${result.title}\nLink: ${result.link}\nSnippet: ${result.snippet}\n`;
+          }).join('\n');
+
+          toolResultMessage = `Internet Search Results for "${toolResult.query}":\n\n${formattedResults}\n\nBased on these search results, please provide a helpful response to the user's message: "${message}". Include relevant information from the search results and cite sources when appropriate.`;
+        } else {
+          toolResultMessage = `No results found for internet search query: "${toolResult.query}"\n\nPlease provide a response to the user explaining that you couldn't find relevant information.`;
+        }
+      } else {
+        // Default formatting for other tools
+        toolResultMessage = `Tool Result:\n\`\`\`json\n${JSON.stringify(toolResult)}\n\`\`\`\n\nBased on this result, please provide a response to the user's message: "${message}"`;
+      }
 
       const followUpResult = await chatSession.sendMessage(toolResultMessage);
       const followUpResponse = followUpResult.response;

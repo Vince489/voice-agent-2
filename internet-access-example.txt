@@ -1,10 +1,12 @@
+JavaScript
+
 /**
  * Tools Service
  *
  * Defines the tools available to the AI agent and provides functions for executing them.
  */
 
-import dotenv from 'dotenv';
+import axios from 'axios'; // Ensure you have axios installed: npm install axios
 
 // Define the tools available to the agent
 export const tools = [
@@ -44,7 +46,7 @@ export const tools = [
         required: true,
       },
     ],
-  }
+  },
 ];
 
 /**
@@ -92,59 +94,23 @@ async function performInternetSearch(args) {
   }
 
   try {
-    // Load environment variables
-    dotenv.config();
-
-    // Get API key and search engine ID from environment variables
-    const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-    const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
-
-    if (!apiKey || !searchEngineId) {
-      console.warn('Google Search API key or Search Engine ID not configured');
-      return {
-        error: "Search API not properly configured. Please set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID in your environment variables.",
-        results: []
-      };
-    }
-
-    // Make the API request
-    const searchApiUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(query)}`;
-    const response = await fetch(searchApiUrl);
-
-    if (!response.ok) {
-      throw new Error(`Search API returned status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data && data.items) {
+    // Replace with your actual internet search API endpoint and API key if required
+    const searchApiUrl = `https://www.googleapis.com/customsearch/v1?key=YOUR_GOOGLE_CUSTOM_SEARCH_API_KEY&cx=YOUR_CSE_ID&q=${encodeURIComponent(query)}`;
+    const response = await axios.get(searchApiUrl);
+    if (response.data && response.data.items) {
       // Extract relevant information from the search results
-      const results = data.items.map(item => ({
+      const results = response.data.items.map(item => ({
         title: item.title,
         link: item.link,
         snippet: item.snippet,
-        displayLink: item.displayLink,
-        formattedUrl: item.formattedUrl
       }));
-
-      return {
-        results,
-        searchInformation: data.searchInformation,
-        query
-      };
+      return { results };
     } else {
-      return {
-        results: [],
-        message: "No results found.",
-        query
-      };
+      return { results: [], message: "No results found." };
     }
   } catch (error) {
     console.error("Error performing internet search:", error);
-    return {
-      error: `Failed to perform internet search: ${error.message}`,
-      query
-    };
+    return { error: `Failed to perform internet search: ${error.message}` };
   }
 }
 
@@ -179,3 +145,70 @@ export default {
   executeTool,
   getCurrentDateTime
 };
+Explanation of Changes:
+
+internet_search Tool Definition:
+
+A new tool object named "internet_search" is added to the tools array.
+name: "internet_search" - This is the identifier your AI agent will use to request this tool.
+description: "Searches the internet for information based on the user's query." - A clear description of what the tool does.
+instructions: "Use this tool when the user asks a question that requires up-to-date information or information not readily available in your internal knowledge. Formulate a concise and effective search query based on the user's request." - Crucial instructions for when and how the AI agent should use this tool.
+parameters: An array defining the expected input parameters for this tool.
+name: "query" - The name of the parameter (the actual search term).
+type: "string" - Specifies that the query should be a text string.
+description: "The search query to use." - Describes what this parameter represents.
+required: true - Indicates that the query parameter is mandatory for this tool.
+performInternetSearch(args) Function:
+
+This asynchronous function handles the actual internet search logic.
+It takes an args object, which is expected to contain a query property.
+Error Handling: It checks if the query is provided.
+Internet Search API Call:
+It uses the axios library (you need to install it: npm install axios) to make an HTTP GET request to a search API.
+Important: Replace "YOUR_GOOGLE_CUSTOM_SEARCH_API_KEY" and "YOUR_CSE_ID" with your actual Google Custom Search Engine API key and Search Engine ID. You'll need to set up a Google Custom Search Engine to use this.
+The encodeURIComponent(query) ensures that the search query is properly formatted for the URL.
+Result Processing:
+If the API call is successful and returns items, it maps the results to a simplified format including title, link, and snippet.
+If no results are found, it returns an object indicating that.
+Error Catching: It includes a try...catch block to handle potential errors during the API call.
+executeTool Function Update:
+
+A new case "internet_search": is added to the switch statement in the executeTool function.
+When the toolName is "internet_search", it calls the performInternetSearch(args) function to execute the search.
+How to Integrate with Your AI Agent:
+
+When your AI agent determines that it needs to search the internet based on the user's query, it should:
+
+Identify the internet_search tool: It should recognize that this tool is appropriate for the user's request.
+
+Extract the search query: It needs to formulate a relevant search query from the user's input.
+
+Call the executeTool function: Your agent needs to call the executeTool function with the name set to "internet_search" and the search query as an argument in the args object:
+
+JavaScript
+
+const query = "What is the current weather in Winter Haven, Florida?";
+const searchResults = await executeTool("internet_search", { query: query });
+
+if (searchResults.results) {
+  console.log("Search Results:", searchResults.results);
+  // Process the search results and formulate a response to the user
+} else if (searchResults.error) {
+  console.error("Internet search failed:", searchResults.error);
+  // Handle the error appropriately
+} else {
+  console.log("No search results found.");
+  // Inform the user that no relevant information was found
+}
+Before Running:
+
+Install axios: If you haven't already, run npm install axios in your project directory.
+Set up Google Custom Search Engine:
+Go to https://cse.google.com/cse/all.
+Create a new search engine. You can choose to search the entire web or specific sites.
+Get your Search Engine ID (CX).
+Go to the Google Cloud Console (https://console.cloud.google.com/).
+Enable the Custom Search API.
+Create API credentials and get your API Key.
+Replace the placeholders in the performInternetSearch function with your actual API key and CSE ID.
+This setup provides a basic internet search capability for your AI agent. You might want to enhance the performInternetSearch function to handle more sophisticated search parameters, result filtering, and error handling based on your specific needs.

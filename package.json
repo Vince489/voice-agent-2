@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "test-search": "node scripts/test-internet-search.js"
   },
   "keywords": [
     "voice",
