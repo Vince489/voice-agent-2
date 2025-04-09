@@ -108,6 +108,78 @@
             display: none;
         }
 
+        /* Image upload styles */
+        .image-preview {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        /* Image preview container */
+        .uploaded-images-container {
+            padding: 10px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+            background-color: #1a1a1a;
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .image-preview-item {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            transition: all 0.2s ease;
+        }
+
+        .image-preview-item:hover {
+            transform: scale(1.05);
+        }
+
+        .image-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #3a3a3a;
+        }
+
+        .remove-image-btn {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: #303030;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 1px solid #444;
+            color: #ccc;
+            transition: all 0.2s ease;
+        }
+
+        .remove-image-btn:hover {
+            background-color: #505050;
+            color: white;
+        }
+
+        /* Loading animation */
+        @keyframes pulse-opacity {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        .animate-pulse {
+            animation: pulse-opacity 1.5s infinite ease-in-out;
+        }
+
         /* Mobile Styles */
         @media (max-width: 768px) {
             .sidebar {
@@ -303,32 +375,29 @@
 
         <!-- Chat Area -->
         <div id="chatDisplay" class="flex-1 overflow-y-auto px-4 py-4">
-            <!-- User Message -->
-            <div class="max-w-3xl mx-auto mb-6">
-
-            </div>
-
-            <!-- Assistant Message -->
-            <div class="max-w-3xl mx-auto mb-6 relative">
-                <div class="flex items-start">
-    
-                </div>
-                <div class="options-button absolute right-0 top-0">
-                    <button class="p-2 text-gray-400">
-                        <i class="fas fa-ellipsis-v"></i>
-                    </button>
-                </div>
-            </div>
+            <!-- Messages will be added here dynamically -->
         </div>
 
         <!-- Input Box -->
         <div class="p-4 border-t border-gray-800">
+            <!-- Image previews (if any) -->
+            <div id="uploadedImagesContainer" class="mx-auto max-w-3xl uploaded-images-container hidden">
+                <!-- Image previews will be added here dynamically -->
+            </div>
+
+            <!-- Input container -->
             <div class="mx-auto max-w-3xl input-container border border-gray-700">
                 <div class="flex items-center px-4 py-3">
-                    <button class="p-2 text-gray-400 hover:text-gray-300">
-                        <i class="fas fa-plus"></i>
-                    </button>
+                    <!-- Image upload button -->
+                    <label for="imageInput" class="p-2 text-gray-400 hover:text-gray-300 cursor-pointer">
+                        <i class="fas fa-image"></i>
+                    </label>
+                    <input type="file" id="imageInput" accept="image/*" class="hidden">
+
+                    <!-- Main text input -->
                     <input id="textInput" type="text" placeholder="Ask Virtra" class="flex-1 bg-transparent text-white outline-none px-2">
+
+                    <!-- Send and record buttons -->
                     <div class="flex items-center">
                         <button id="sendButton" class="p-2 text-gray-400 hover:text-gray-300">
                             <i class="fas fa-paper-plane"></i>
@@ -339,6 +408,7 @@
                     </div>
                 </div>
             </div>
+
             <div class="max-w-3xl mx-auto mt-2 text-center">
                 <p class="text-gray-500 text-sm">Virtra can make mistakes, so double-check it</p>
             </div>
@@ -369,19 +439,82 @@
             }
         });
 
-        // Voice Agent Functionality
         document.addEventListener('DOMContentLoaded', () => {
             const chatDisplay = document.getElementById('chatDisplay');
             const textInput = document.getElementById('textInput');
             const sendButton = document.getElementById('sendButton');
             const recordButton = document.getElementById('recordButton');
+            const imageInput = document.getElementById('imageInput');
+            const uploadedImagesContainer = document.getElementById('uploadedImagesContainer');
 
+            let uploadedImages = [];
             let mediaRecorder;
             let audioChunks = [];
             let isRecording = false;
 
+            // Handle image selection
+            imageInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+
+                    reader.onload = (e) => {
+                        // Add to uploaded images array
+                        uploadedImages.push({
+                            file: file,
+                            dataUrl: e.target.result,
+                            id: 'img_' + Date.now()
+                        });
+
+                        // Update preview
+                        updateImagePreview();
+                    };
+
+                    reader.readAsDataURL(file);
+                }
+
+                // Clear the input to allow selecting the same file again
+                imageInput.value = '';
+            });
+
+            // Update image preview
+            function updateImagePreview() {
+                if (uploadedImages.length > 0) {
+                    uploadedImagesContainer.classList.remove('hidden');
+                    uploadedImagesContainer.innerHTML = '';
+
+                    uploadedImages.forEach(img => {
+                        const previewItem = document.createElement('div');
+                        previewItem.className = 'image-preview-item';
+                        previewItem.innerHTML = `
+                            <img src="${img.dataUrl}" alt="Preview">
+                            <div class="remove-image-btn" data-id="${img.id}">
+                                <i class="fas fa-times"></i>
+                            </div>
+                        `;
+                        uploadedImagesContainer.appendChild(previewItem);
+                    });
+
+                    // Add event listeners to remove buttons
+                    document.querySelectorAll('.remove-image-btn').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const imgId = this.getAttribute('data-id');
+                            removeImage(imgId);
+                        });
+                    });
+                } else {
+                    uploadedImagesContainer.classList.add('hidden');
+                }
+            }
+
+            // Remove image
+            function removeImage(id) {
+                uploadedImages = uploadedImages.filter(img => img.id !== id);
+                updateImagePreview();
+            }
+
             // Add a message to the chat display
-            function addMessage(text, isUser = false) {
+            function addMessage(text, isUser = false, images = []) {
                 const messageContainer = document.createElement('div');
                 messageContainer.className = 'max-w-3xl mx-auto mb-6';
 
@@ -389,7 +522,20 @@
                     // User message
                     const userBubble = document.createElement('div');
                     userBubble.className = 'user-bubble ml-12 mr-0 user-message';
-                    userBubble.innerHTML = `<p>${text}</p>`;
+
+                    // Add images if any
+                    if (images.length > 0) {
+                        const imagesHtml = images.map(img =>
+                            `<div class="mb-2">
+                                <img src="${img}" class="rounded-lg max-h-60 max-w-full">
+                            </div>`
+                        ).join('');
+
+                        userBubble.innerHTML = imagesHtml + `<p>${text}</p>`;
+                    } else {
+                        userBubble.innerHTML = `<p>${text}</p>`;
+                    }
+
                     messageContainer.appendChild(userBubble);
                 } else {
                     // Assistant message
@@ -423,58 +569,124 @@
                 chatDisplay.scrollTop = chatDisplay.scrollHeight;
             }
 
-            // Send a text message
-            async function sendTextMessage(text) {
-                if (!text.trim()) return;
+            // Send message
+            async function sendMessage() {
+                const text = textInput.value.trim();
+                const hasImages = uploadedImages.length > 0;
 
-                // Add user message to chat
-                addMessage(text, true);
+                if (!text && !hasImages) return;
+
+                // Get image data URLs for display
+                const imageUrls = uploadedImages.map(img => img.dataUrl);
+
+                // Add message to chat
+                addMessage(text || "What do you think of this image?", true, imageUrls);
+
+                // Clear the image preview immediately after sending
+                const oldImages = [...uploadedImages]; // Keep a copy for the API call
+                uploadedImages = [];
+                updateImagePreview();
+                textInput.value = '';
 
                 try {
-                    // Send message to the agent
-                    const response = await fetch('/api/agent/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: text,
-                            context: { generateSpeech: true }
-                        })
-                    });
+                    if (hasImages) {
+                        // Show loading indicator
+                        const loadingMsg = document.createElement('div');
+                        loadingMsg.className = 'max-w-3xl mx-auto mb-6 text-center text-gray-400';
+                        loadingMsg.innerHTML = '<div class="inline-block animate-pulse">Analyzing image...</div>';
+                        chatDisplay.appendChild(loadingMsg);
 
-                    const data = await response.json();
+                        // Handle image upload
+                        const image = oldImages[0]; // Use the first image
+                        const prompt = text || "Describe this image.";
 
-                    // Add agent response to chat
-                    addMessage(data.text);
+                        // Create form data
+                        const formData = new FormData();
+                        formData.append('image', image.file);
+                        formData.append('prompt', prompt);
 
-                    // Play audio if available
-                    if (data.audioUrl) {
-                        console.log('Playing audio response');
-                        const audio = new Audio(data.audioUrl);
-                        audio.play().catch(error => {
-                            console.error('Error playing audio:', error);
+                        // Send image to server for analysis
+                        const response = await fetch('/api/image/analyze', {
+                            method: 'POST',
+                            body: formData
                         });
+
+                        const data = await response.json();
+                        console.log('Image analysis response:', data);
+
+                        // Remove loading indicator
+                        chatDisplay.removeChild(loadingMsg);
+
+                        // Add agent response to chat
+                        addMessage(data.text);
+
+                        // Play audio if available
+                        if (data.audioUrl) {
+                            console.log('Playing audio response for image analysis');
+                            const audio = new Audio(data.audioUrl);
+                            audio.play().catch(error => {
+                                console.error('Error playing audio:', error);
+                            });
+                        } else {
+                            console.warn('No audio URL received in the image analysis response');
+                        }
+                    } else {
+                        // Show thinking indicator
+                        const thinkingMsg = document.createElement('div');
+                        thinkingMsg.className = 'max-w-3xl mx-auto mb-6 text-center text-gray-400';
+                        thinkingMsg.innerHTML = '<div class="inline-block animate-pulse">Thinking...</div>';
+                        chatDisplay.appendChild(thinkingMsg);
+
+                        // Handle text message
+                        const response = await fetch('/api/agent/chat', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                message: text,
+                                context: { generateSpeech: true }
+                            })
+                        });
+
+                        const data = await response.json();
+                        console.log('Response data:', data);
+
+                        // Remove thinking indicator
+                        chatDisplay.removeChild(thinkingMsg);
+
+                        // Add agent response to chat
+                        addMessage(data.text);
+
+                        // Play audio if available
+                        if (data.audioUrl) {
+                            console.log('Playing audio response, URL length:', data.audioUrl.length);
+                            const audio = new Audio(data.audioUrl);
+                            audio.play().catch(error => {
+                                console.error('Error playing audio:', error);
+                            });
+                        } else {
+                            console.warn('No audio URL received in the response');
+                        }
                     }
                 } catch (error) {
-                    console.error('Error sending message:', error);
+                    console.error('Error processing request:', error);
                     addMessage('Sorry, I encountered an error processing your request.');
                 }
+
+                // Clear inputs
+                textInput.value = '';
+                uploadedImages = [];
+                updateImagePreview();
             }
 
             // Handle send button click
-            sendButton.addEventListener('click', () => {
-                const text = textInput.value;
-                sendTextMessage(text);
-                textInput.value = '';
-            });
+            sendButton.addEventListener('click', sendMessage);
 
             // Handle enter key in text input
             textInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
-                    const text = textInput.value;
-                    sendTextMessage(text);
-                    textInput.value = '';
+                    sendMessage();
                 }
             });
 
@@ -497,14 +709,20 @@
                         });
 
                         mediaRecorder.addEventListener('stop', async () => {
-                            // Create audio blob
-                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-
-                            // Create form data
-                            const formData = new FormData();
-                            formData.append('audio', audioBlob);
-
                             try {
+                                // Show transcribing indicator
+                                const transcribingMsg = document.createElement('div');
+                                transcribingMsg.className = 'max-w-3xl mx-auto mb-6 text-center text-gray-400';
+                                transcribingMsg.innerHTML = '<div class="inline-block animate-pulse">Transcribing audio...</div>';
+                                chatDisplay.appendChild(transcribingMsg);
+
+                                // Create audio blob
+                                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+
+                                // Create form data
+                                const formData = new FormData();
+                                formData.append('audio', audioBlob);
+
                                 // Transcribe audio
                                 const transcribeResponse = await fetch('/api/transcribe', {
                                     method: 'POST',
@@ -513,9 +731,18 @@
 
                                 const transcribeData = await transcribeResponse.json();
 
+                                // Remove transcribing indicator
+                                chatDisplay.removeChild(transcribingMsg);
+
                                 if (transcribeData.text) {
                                     // Add transcription to chat
                                     addMessage(transcribeData.text, true);
+
+                                    // Show thinking indicator
+                                    const thinkingMsg = document.createElement('div');
+                                    thinkingMsg.className = 'max-w-3xl mx-auto mb-6 text-center text-gray-400';
+                                    thinkingMsg.innerHTML = '<div class="inline-block animate-pulse">Thinking...</div>';
+                                    chatDisplay.appendChild(thinkingMsg);
 
                                     // Process with agent
                                     const agentResponse = await fetch('/api/agent/voice', {
@@ -530,6 +757,9 @@
                                     });
 
                                     const agentData = await agentResponse.json();
+
+                                    // Remove thinking indicator
+                                    chatDisplay.removeChild(thinkingMsg);
 
                                     // Add agent response to chat
                                     addMessage(agentData.text);
@@ -564,6 +794,11 @@
                     }
                 }
             });
+
+            // Add a welcome message
+            setTimeout(() => {
+                addMessage("Welcome to Virtra! You can type a message, upload images, or use voice input. How can I help you today?");
+            }, 500);
         });
     </script>
 </body>

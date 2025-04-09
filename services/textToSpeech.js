@@ -20,12 +20,12 @@ try {
 // Default voice settings
 export const DEFAULT_VOICE_SETTINGS = {
   languageCode: 'en-US',
-  voiceName: 'en-US-Chirp3-HD-Zephyr',
+  voiceName: 'en-US-Chirp3-HD-Zephyr',  // Keeping the original voice
   ssmlGender: 'NEUTRAL',
   audioEncoding: 'MP3',
-  speakingRate: 0.90,
-  pitch: 0.0,
-  effectsProfileId: ['small-bluetooth-speaker-class-device'] // Optimize for faster processing
+  speakingRate: 1.0,  // Normal speaking rate
+  pitch: 0.0  // No trailing comma for the last property
+  // Removed effectsProfileId to get cleaner audio
 };
 
 /**
@@ -50,10 +50,14 @@ export async function synthesizeSpeech(text, voiceSettings = {}) {
       audioConfig: {
         audioEncoding: settings.audioEncoding,
         speakingRate: settings.speakingRate,
-        pitch: settings.pitch,
-        effectsProfileId: settings.effectsProfileId
+        pitch: settings.pitch
       }
     };
+
+    // Add effectsProfileId if it exists in settings
+    if (settings.effectsProfileId) {
+      request.audioConfig.effectsProfileId = settings.effectsProfileId;
+    }
 
     // Perform the text-to-speech request
     const [response] = await client.synthesizeSpeech(request);
