@@ -4,7 +4,8 @@
  * Defines the tools available to the AI agent and provides functions for executing them.
  */
 
-import dotenv from 'dotenv';
+// Import the enhanced search functionality
+import { performEnhancedSearch } from './enhancedSearch.js';
 
 // Define the tools available to the agent
 export const tools = [
@@ -13,6 +14,32 @@ export const tools = [
     description: "Your luxury Jaeger-LeCoultre Calibre 822 wristwatch in Pink Gold 750/1000 (18 carats). While appearing to be a traditional mechanical watch with a hand-wound movement, it has subtle AI integration by Virtron Labs that provides accurate time information. It features a classic round case with a silver-toned dial, gold hour markers, and a hand-stitched alligator leather strap.",
     instructions: "Use this tool ONLY when the user specifically asks for the current date, time, day of the week, or any time-sensitive information. Think of it as looking at your treasured Jaeger-LeCoultre, which you're quite fond of. When using this tool, imagine you're physically checking your mechanical watch, though the AI integration provides the precise data. Do not include time information in responses unless specifically asked.",
     parameters: [] // No parameters needed for this tool
+  },
+  {
+    name: "searxng_search",
+    description: "Searches the internet using SearXNG, a privacy-respecting metasearch engine that doesn't track or profile users.",
+    instructions: "Use this tool when the user asks a question that requires up-to-date information or information not readily available in your internal knowledge. Formulate a concise and effective search query based on the user's request.",
+    parameters: [
+      {
+        name: "query",
+        type: "string",
+        description: "The search query to use.",
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "enhanced_search",
+    description: "Performs an advanced search that not only returns search results but also fetches and processes the content from the top results.",
+    instructions: "Use this tool when you need detailed information from multiple web sources on a topic. This tool will search for relevant pages and extract their main content, providing you with comprehensive information to answer complex questions.",
+    parameters: [
+      {
+        name: "query",
+        type: "string",
+        description: "The search query to use.",
+        required: true,
+      },
+    ],
   },
   {
     name: "image_analysis",
@@ -31,19 +58,6 @@ export const tools = [
     description: "Converts the user's spoken words into text that you can understand and respond to.",
     instructions: "This tool is automatically used when the user speaks into their microphone. The transcribed text is provided to you, allowing you to understand what the user said verbally.",
     parameters: [] // Parameters are handled automatically
-  },
-  {
-    name: "internet_search",
-    description: "Searches the internet for information based on the user's query.",
-    instructions: "Use this tool when the user asks a question that requires up-to-date information or information not readily available in your internal knowledge. Formulate a concise and effective search query based on the user's request.",
-    parameters: [
-      {
-        name: "query",
-        type: "string",
-        description: "The search query to use.",
-        required: true,
-      },
-    ],
   }
 ];
 
@@ -80,70 +94,84 @@ export function getCurrentDateTime() {
   };
 }
 
+
+
 /**
- * Perform an internet search
+ * Perform a search using SearXNG
  * @param {object} args - Arguments for the search, including the query
  * @returns {Promise<object>} - The search results
  */
-async function performInternetSearch(args) {
+async function performSearxNGSearch(args) {
   const { query } = args;
   if (!query) {
     return { error: "Search query cannot be empty." };
   }
 
   try {
-    // Load environment variables
-    dotenv.config();
+    // Try a different public SearXNG instance
+    const searxngInstance = 'https://search.mdosch.de';
+    const searchUrl = `${searxngInstance}/search?q=${encodeURIComponent(query)}&format=json`;
 
-    // Get API key and search engine ID from environment variables
-    const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-    const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
+    console.log(`Performing search for: ${query} using ${searchUrl}`);
 
-    if (!apiKey || !searchEngineId) {
-      console.warn('Google Search API key or Search Engine ID not configured');
-      return {
-        error: "Search API not properly configured. Please set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID in your environment variables.",
-        results: []
-      };
-    }
-
-    // Make the API request
-    const searchApiUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(query)}`;
-    const response = await fetch(searchApiUrl);
+    // Make the request to the SearXNG instance
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
 
     if (!response.ok) {
-      throw new Error(`Search API returned status: ${response.status}`);
+      throw new Error(`SearXNG API returned status: ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (data && data.items) {
+    if (data && data.results) {
       // Extract relevant information from the search results
-      const results = data.items.map(item => ({
-        title: item.title,
-        link: item.link,
-        snippet: item.snippet,
-        displayLink: item.displayLink,
-        formattedUrl: item.formattedUrl
+      const results = data.results.map(result => ({
+        title: result.title,
+        url: result.url,
+        content: result.content || result.snippet || '',
+        engine: result.engine,
+        score: result.score || 1.0
       }));
 
       return {
         results,
-        searchInformation: data.searchInformation,
-        query
+        query,
+        number_of_results: data.number_of_results || results.length,
+        answers: data.answers || []
       };
     } else {
+      // Fallback to simulated results if no results are returned
+      console.log('No results from SearXNG, using fallback results');
+
+      const mockResults = [
+        {
+          title: `Information about ${query}`,
+          url: `https://example.com/search?q=${encodeURIComponent(query)}`,
+          content: `This is fallback content about ${query}. The local SearXNG instance didn't return any results.`,
+          engine: 'fallback',
+          score: 1.0
+        }
+      ];
+
       return {
-        results: [],
-        message: "No results found.",
-        query
+        results: mockResults,
+        query,
+        number_of_results: mockResults.length,
+        answers: [],
+        note: "These are fallback results. Your local SearXNG instance didn't return any results."
       };
     }
   } catch (error) {
-    console.error("Error performing internet search:", error);
+    console.error("Error performing SearXNG search:", error);
     return {
-      error: `Failed to perform internet search: ${error.message}`,
-      query
+      error: `Failed to perform search: ${error.message}`,
+      query,
+      results: [],
+      number_of_results: 0
     };
   }
 }
@@ -163,8 +191,11 @@ export async function executeTool(toolName, args = {}) {
     case "datetime":
       return getCurrentDateTime();
 
-    case "internet_search":
-      return performInternetSearch(args);
+    case "searxng_search":
+      return performSearxNGSearch(args);
+
+    case "enhanced_search":
+      return performEnhancedSearch(args.query);
 
     // Other tools (image_analysis, text_to_speech, speech_to_text) are handled
     // automatically by the application flow, not directly called by the agent

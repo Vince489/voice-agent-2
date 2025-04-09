@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "test-search": "node scripts/test-internet-search.js"
+    "test-search": "node scripts/test-internet-search.js",
+    "test-enhanced-search": "node scripts/test-enhanced-search.js"
   },
   "keywords": [
     "voice",
