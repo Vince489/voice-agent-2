@@ -5,12 +5,12 @@
  * but also fetching and processing the content from top results.
  */
 
-/**
- * Convert HTML to plain text by extracting the main content
- * @param {string} html - The HTML content to convert
- * @returns {string} - The extracted plain text
- */
-function htmlToText(html) {
+import { extractMainContent, extractSearchResults } from './htmlParser.js';
+
+// Legacy htmlToText function kept for reference but not used
+// Keeping this code commented out for historical reference
+/*
+function legacyHtmlToText(html) {
   try {
     // Check if HTML is valid
     if (!html || typeof html !== 'string') {
@@ -92,7 +92,7 @@ function htmlToText(html) {
       return 'Error extracting text from HTML';
     }
   }
-}
+}*/
 
 /**
  * Get URLs from search results using multiple search engines
@@ -105,35 +105,59 @@ async function getNewsUrls(query) {
     // Local SearXNG instance (primary)
     {
       name: 'SearXNG (Local Docker)',
-      url: `http://localhost:8080/search?q=${encodeURIComponent(query)}&format=json`,
+      url: `http://localhost:8080/search?q=${encodeURIComponent(query)}`,
       parser: async (response) => {
-        const data = await response.json();
-        return data.results ? data.results.map(result => result.url) : [];
+        // Parse HTML response instead of JSON
+        const html = await response.text();
+
+        // Use Cheerio-based parser to extract search results
+        const results = extractSearchResults(html);
+
+        // Return just the URLs
+        return results.map(result => result.url);
       }
     },
     // Fallback to public instances
     {
       name: 'SearXNG (rhscz.eu)',
-      url: `https://search.rhscz.eu/search?q=${encodeURIComponent(query)}&format=json`,
+      url: `https://search.rhscz.eu/search?q=${encodeURIComponent(query)}`,
       parser: async (response) => {
-        const data = await response.json();
-        return data.results ? data.results.map(result => result.url) : [];
+        // Parse HTML response instead of JSON
+        const html = await response.text();
+
+        // Use Cheerio-based parser to extract search results
+        const results = extractSearchResults(html);
+
+        // Return just the URLs
+        return results.map(result => result.url);
       }
     },
     {
       name: 'SearXNG (mdosch.de)',
-      url: `https://search.mdosch.de/search?q=${encodeURIComponent(query)}&format=json`,
+      url: `https://search.mdosch.de/search?q=${encodeURIComponent(query)}`,
       parser: async (response) => {
-        const data = await response.json();
-        return data.results ? data.results.map(result => result.url) : [];
+        // Parse HTML response instead of JSON
+        const html = await response.text();
+
+        // Use Cheerio-based parser to extract search results
+        const results = extractSearchResults(html);
+
+        // Return just the URLs
+        return results.map(result => result.url);
       }
     },
     {
       name: 'SearXNG (search.disroot.org)',
-      url: `https://search.disroot.org/search?q=${encodeURIComponent(query)}&format=json`,
+      url: `https://search.disroot.org/search?q=${encodeURIComponent(query)}`,
       parser: async (response) => {
-        const data = await response.json();
-        return data.results ? data.results.map(result => result.url) : [];
+        // Parse HTML response instead of JSON
+        const html = await response.text();
+
+        // Use Cheerio-based parser to extract search results
+        const results = extractSearchResults(html);
+
+        // Return just the URLs
+        return results.map(result => result.url);
       }
     },
     {
@@ -358,7 +382,8 @@ async function fetchAndCleanText(url) {
       title = titleMatch[1].trim();
     }
 
-    const text = htmlToText(html);
+    // Use the new extractMainContent function for better content extraction
+    const text = extractMainContent(html);
 
     // Only return if we have meaningful content (more than just a few words)
     if (!text || text.trim().split(/\s+/).length < 5) {
