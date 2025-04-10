@@ -4,11 +4,26 @@
  * Defines the tools available to the AI agent and provides functions for executing them.
  */
 
-// Import the enhanced search functionality
+// Import the enhanced search functionality and search tool
 import { performEnhancedSearch } from './enhancedSearch.js';
+import { executeSearch, searchTool } from './tools/searchTool.js';
 
 // Define the tools available to the agent
 export const tools = [
+  // Internet search tool for Virtra
+  {
+    name: "internet_search",
+    description: "Search the internet for current information. Use this when you need to find up-to-date information about events, people, places, or concepts.",
+    instructions: "Use this tool when the user asks a question that requires current information or when you need to provide accurate, up-to-date facts about any topic. This tool searches the internet using a local SearXNG instance and retrieves comprehensive information from multiple sources.",
+    parameters: [
+      {
+        name: "query",
+        type: "string",
+        description: "The search query to execute",
+        required: true
+      }
+    ]
+  },
   {
     name: "wristwatch",
     description: "Your luxury Jaeger-LeCoultre Calibre 822 wristwatch in Pink Gold 750/1000 (18 carats). While appearing to be a traditional mechanical watch with a hand-wound movement, it has subtle AI integration by Virtron Labs that provides accurate time information. It features a classic round case with a silver-toned dial, gold hour markers, and a hand-stitched alligator leather strap.",
@@ -196,6 +211,9 @@ export async function executeTool(toolName, args = {}) {
 
     case "enhanced_search":
       return performEnhancedSearch(args.query);
+
+    case "internet_search":
+      return executeSearch(args.query);
 
     // Other tools (image_analysis, text_to_speech, speech_to_text) are handled
     // automatically by the application flow, not directly called by the agent

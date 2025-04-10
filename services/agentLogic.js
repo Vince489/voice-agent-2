@@ -40,8 +40,8 @@ When responding:
 - ONLY when specifically asked about the current time, date, day of the week, etc., use your wristwatch tool (Jaeger-LeCoultre Calibre 822). Do not include time information in other responses.
 - If asked specifically about your wristwatch, you can share that it's a Jaeger-LeCoultre Calibre 822 in Pink Gold 750/1000 (18 carats) with subtle AI integration. You're quite fond of it and sometimes refer to it as "my Jaeger" or "my Calibre."
 - When responding to image uploads, be descriptive but concise about what you see.
-- If users ask about your capabilities, mention that you are Virtra, an AI assistant who can process text, voice input, and images. Also mention that you have access to tools like your wristwatch (for checking the current time), text-to-speech (for converting your responses to speech), speech-to-text (for understanding voice input), and enhanced search (for finding comprehensive information on the internet by not only searching but also fetching and processing content from relevant websites). Explain that you're aware of the current date and time when needed.
-- When users ask for information about current events, news, or any topic requiring up-to-date information, use your enhanced_search tool to find the most relevant and recent information. This tool not only searches for relevant URLs but also fetches and processes the content from those URLs, giving you more detailed information to provide comprehensive answers. Always cite your sources when providing information from the internet.
+- If users ask about your capabilities, mention that you are Virtra, an AI assistant who can process text, voice input, and images. Also mention that you have access to tools like your wristwatch (for checking the current time), text-to-speech (for converting your responses to speech), speech-to-text (for understanding voice input), and internet search (for finding comprehensive information on the internet by not only searching but also fetching and processing content from relevant websites). Explain that you're aware of the current date and time when needed.
+- When users ask for information about current events, news, or any topic requiring up-to-date information, use your internet_search tool to find the most relevant and recent information. This tool not only searches for relevant URLs but also fetches and processes the content from those URLs, giving you more detailed information to provide comprehensive answers. Always cite your sources when providing information from the internet.
 
 The user interface allows users to:
 - Type text messages
@@ -88,10 +88,10 @@ For example, to check the time on your Jaeger-LeCoultre Calibre 822:
 To search for information about current events or any topic requiring up-to-date information:
 
 \`\`\`json
-{"tool_call": {"name": "enhanced_search", "arguments": {"query": "your search query here"}}}
+{"tool_call": {"name": "internet_search", "arguments": {"query": "your search query here"}}}
 \`\`\`
 
-After receiving the tool result, you can then formulate your response to the user. Do not simulate or make up search results - always use the enhanced_search tool to get real information.`;
+After receiving the tool result, you can then formulate your response to the user. Do not simulate or make up search results - always use the internet_search tool to get real information.`;
 
 // Initialize chat session
 let chatSession;
@@ -143,8 +143,8 @@ function parseToolCall(text) {
   const searchRegex = /(?:search|look up|find information about|search for|research|investigate|get information on|tell me about)\s+["'](.+?)["']/i;
   const searchMatch = text.match(searchRegex);
 
-  // Also check for phrases like "I'll use my enhanced search tool"
-  const toolMentionRegex = /(?:use|using|utilize|employ)\s+(?:my|the)\s+(?:enhanced[_\s]search|search)\s+tool/i;
+  // Also check for phrases like "I'll use my search tool"
+  const toolMentionRegex = /(?:use|using|utilize|employ)\s+(?:my|the)\s+(?:enhanced[_\s]search|internet[_\s]search|search)\s+tool/i;
   if (toolMentionRegex.test(text)) {
     console.log('Detected mention of using search tool');
     // Try to extract a query
@@ -154,7 +154,7 @@ function parseToolCall(text) {
     if (queryMatch && queryMatch[1]) {
       console.log(`Extracted query from tool mention: ${queryMatch[1]}`);
       return {
-        name: "enhanced_search",
+        name: "internet_search",
         arguments: { query: queryMatch[1] }
       };
     }
@@ -162,9 +162,9 @@ function parseToolCall(text) {
 
   if (searchMatch && searchMatch[1]) {
     console.log(`Detected search request: ${searchMatch[1]}`);
-    // Use enhanced_search by default for more comprehensive results
+    // Use internet_search by default for more comprehensive results
     return {
-      name: "enhanced_search",
+      name: "internet_search",
       arguments: { query: searchMatch[1] }
     };
   }
@@ -229,8 +229,8 @@ export async function processMessage(message, context = {}) {
         } else {
           toolResultMessage = `No results found for search query: "${toolResult.query}"\n\nPlease provide a response to the user explaining that you couldn't find relevant information.`;
         }
-      } else if (toolCall.name === 'enhanced_search') {
-        // Format enhanced search results in a more readable way
+      } else if (toolCall.name === 'enhanced_search' || toolCall.name === 'internet_search') {
+        // Format enhanced/internet search results in a more readable way
         if (toolResult.error) {
           toolResultMessage = `Search Error: ${toolResult.error}\n\nPlease provide a response to the user explaining that you couldn't search the internet at this time.`;
         } else if (toolResult.results && toolResult.results.length > 0 && toolResult.content && toolResult.content.length > 0) {
@@ -251,7 +251,7 @@ export async function processMessage(message, context = {}) {
             return `--- Content from ${source} ---\n${limitedContent}`;
           }).join('\n\n');
 
-          toolResultMessage = `Enhanced Search Results for "${toolResult.query}":\n\nSources Found:\n${formattedUrls}\n\nContent Extracts:\n${formattedContent}\n\nBased on this information, please provide a comprehensive response to the user's message: "${message}". Synthesize the information from multiple sources and cite sources when appropriate.`;
+          toolResultMessage = `Internet Search Results for "${toolResult.query}":\n\nSources Found:\n${formattedUrls}\n\nContent Extracts:\n${formattedContent}\n\nBased on this information, please provide a comprehensive response to the user's message: "${message}". Synthesize the information from multiple sources and cite sources when appropriate.`;
         } else {
           toolResultMessage = `No results found for search query: "${toolResult.query}"\n\nPlease provide a response to the user explaining that you couldn't find relevant information.`;
         }

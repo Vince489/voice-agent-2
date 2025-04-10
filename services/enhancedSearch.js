@@ -102,6 +102,24 @@ function htmlToText(html) {
 async function getNewsUrls(query) {
   // List of search engines to try in order
   const searchEngines = [
+    // Local SearXNG instance (primary)
+    {
+      name: 'SearXNG (Local Docker)',
+      url: `http://localhost:8080/search?q=${encodeURIComponent(query)}&format=json`,
+      parser: async (response) => {
+        const data = await response.json();
+        return data.results ? data.results.map(result => result.url) : [];
+      }
+    },
+    // Fallback to public instances
+    {
+      name: 'SearXNG (rhscz.eu)',
+      url: `https://search.rhscz.eu/search?q=${encodeURIComponent(query)}&format=json`,
+      parser: async (response) => {
+        const data = await response.json();
+        return data.results ? data.results.map(result => result.url) : [];
+      }
+    },
     {
       name: 'SearXNG (mdosch.de)',
       url: `https://search.mdosch.de/search?q=${encodeURIComponent(query)}&format=json`,
@@ -113,6 +131,14 @@ async function getNewsUrls(query) {
     {
       name: 'SearXNG (search.disroot.org)',
       url: `https://search.disroot.org/search?q=${encodeURIComponent(query)}&format=json`,
+      parser: async (response) => {
+        const data = await response.json();
+        return data.results ? data.results.map(result => result.url) : [];
+      }
+    },
+    {
+      name: 'SearXNG (search.tiekoetter.com)',
+      url: `https://search.tiekoetter.com/search?q=${encodeURIComponent(query)}&format=json`,
       parser: async (response) => {
         const data = await response.json();
         return data.results ? data.results.map(result => result.url) : [];
@@ -142,7 +168,9 @@ async function getNewsUrls(query) {
       console.log(`Searching using: ${engine.name}`);
       const controller = new AbortController();
       const signal = controller.signal;
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      // Use a longer timeout for local instance, shorter for remote
+      const timeout = engine.name.includes('Local') ? 15000 : 8000;
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       const searchResults = await fetch(engine.url, {
         headers: {
@@ -155,6 +183,16 @@ async function getNewsUrls(query) {
 
       if (!searchResults.ok) {
         console.log(`${engine.name} returned status: ${searchResults.status}`);
+
+        // If it's the local instance and we get a 403, log a more helpful message
+        if (engine.name.includes('Local') && searchResults.status === 403) {
+          console.log('Local SearXNG instance returned 403 Forbidden. This could be due to:');
+          console.log('1. Rate limiting by search engines');
+          console.log('2. IP blocking from Docker container');
+          console.log('3. Configuration issues with SearXNG');
+          console.log('Falling back to other search engines...');
+        }
+
         continue; // Try the next engine
       }
 
@@ -225,6 +263,26 @@ async function getFallbackUrls(query) {
         'https://www.nature.com/articles/d41586-023-00107-z',
         'https://www.wired.com/tag/artificial-intelligence/',
         'https://www.sciencedaily.com/news/computers_math/artificial_intelligence/'
+      ];
+    }
+    // Music/Artists/Celebrities
+    else if (lowerQuery.includes('music') ||
+             lowerQuery.includes('artist') ||
+             lowerQuery.includes('rapper') ||
+             lowerQuery.includes('singer') ||
+             lowerQuery.includes('celebrity') ||
+             lowerQuery.includes('dolph')) {
+      // Extract potential artist/celebrity name
+      const words = query.split(' ');
+      const potentialName = words.length >= 2 ? `${words[0]} ${words[1]}` : words[0];
+      const encodedName = encodeURIComponent(potentialName);
+
+      return [
+        `https://en.wikipedia.org/wiki/Special:Search?search=${encodedName}`,
+        `https://www.billboard.com/search/${encodedName}/`,
+        `https://pitchfork.com/search/?query=${encodedName}`,
+        `https://www.rollingstone.com/search/?s=${encodedName}`,
+        `https://www.allmusic.com/search/all/${encodedName}`
       ];
     }
     // News/Current Events
