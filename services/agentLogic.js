@@ -295,8 +295,14 @@ export async function processMessage(message, context = {}) {
       let toolResultMessage;
 
       if (toolCall.name === 'searxng_search') {
+        // Check if toolResult is undefined
+        if (!toolResult) {
+          toolResultMessage = `Search Error: The search tool returned no results. This could be due to a connection issue with the search service.
+
+Please provide a response to the user explaining that you couldn't search the internet at this time.`;
+        }
         // Format SearXNG search results in a more readable way
-        if (toolResult.error) {
+        else if (toolResult.error) {
           toolResultMessage = `Search Error: ${toolResult.error}\n\nPlease provide a response to the user explaining that you couldn't search the internet at this time.`;
         } else if (toolResult.results && toolResult.results.length > 0) {
           const formattedResults = toolResult.results.map((result, index) => {
