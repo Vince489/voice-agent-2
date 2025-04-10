@@ -298,11 +298,8 @@
 
         <!-- Collapsed Sidebar Content (t1 style) -->
         <div class="sidebar-collapsed-content flex flex-col items-center mt-8 space-y-6">
-            <div class="sidebar-icon p-3 rounded-full cursor-pointer">
+            <div id="newChatButtonCollapsed" class="sidebar-icon p-3 rounded-full cursor-pointer">
                 <i class="fas fa-plus text-gray-400"></i>
-            </div>
-            <div class="sidebar-icon p-3 rounded-full cursor-pointer">
-                <i class="far fa-heart text-gray-400"></i>
             </div>
             <div class="sidebar-icon p-3 rounded-full cursor-pointer">
                 <i class="fas fa-history text-gray-400"></i>
@@ -314,37 +311,16 @@
 
         <!-- Expanded Sidebar Content (t2 style) -->
         <div class="sidebar-expanded-content">
-            <button class="flex items-center gap-2 text-white text-sm px-2 py-2 hover:bg-gray-800 rounded w-full">
+            <button id="newChatButton" class="flex items-center gap-2 text-white text-sm px-2 py-2 hover:bg-gray-800 rounded w-full">
                 <i class="fas fa-plus text-gray-400"></i>
                 <span class="sidebar-item-text">New chat</span>
             </button>
 
-            <div class="mt-6 text-xs text-gray-400 px-2">Recent</div>
-            <ul class="mt-2 space-y-1 px-2 text-sm">
-                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800">
-                    <i class="fas fa-bars text-gray-400"></i>
-                    <span class="sidebar-item-text">Ride-Sharing's Taxi Industry I...</span>
-                    <span class="dot-indicator"></span>
-                </li>
-                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800 sidebar-item-active">
-                    <i class="fas fa-bars text-gray-400"></i>
-                    <span class="sidebar-item-text">Sidebar View Troubleshooti...</span>
-                </li>
-                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800">
-                    <i class="fas fa-bars text-gray-400"></i>
-                    <span class="sidebar-item-text">Ollama Troubleshooting: Upg...</span>
-                </li>
-                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800">
-                    <i class="fas fa-bars text-gray-400"></i>
-                    <span class="sidebar-item-text">A Pleasant Monday Morning ...</span>
-                </li>
-                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800">
-                    <i class="fas fa-bars text-gray-400"></i>
-                    <span class="sidebar-item-text">Google Voice Ringing Config...</span>
-                </li>
-                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800 text-gray-400">
-                    <i class="fas fa-chevron-down text-gray-400"></i>
-                    <span class="sidebar-item-text">More</span>
+            <div class="mt-6 text-xs text-gray-400 px-2">Recent Conversations</div>
+            <ul id="conversationsList" class="mt-2 space-y-1 px-2 text-sm">
+                <!-- Conversations will be loaded here dynamically -->
+                <li class="flex items-center justify-center py-4 text-gray-400">
+                    <span class="text-xs">Loading conversations...</span>
                 </li>
             </ul>
 
@@ -596,6 +572,23 @@
             }
         });
 
+        // Function to generate a unique session ID
+        function generateSessionId() {
+            // Check if we already have a session ID in localStorage
+            let sessionId = localStorage.getItem('virtra_session_id');
+
+            // If not, create a new one
+            if (!sessionId) {
+                sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+                localStorage.setItem('virtra_session_id', sessionId);
+                console.log('Generated new session ID:', sessionId);
+            } else {
+                console.log('Using existing session ID:', sessionId);
+            }
+
+            return sessionId;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const chatDisplay = document.getElementById('chatDisplay');
             const textInput = document.getElementById('textInput');
@@ -603,6 +596,131 @@
             const recordButton = document.getElementById('recordButton');
             const imageInput = document.getElementById('imageInput');
             const uploadedImagesContainer = document.getElementById('uploadedImagesContainer');
+
+            // Generate or retrieve session ID
+            let sessionId = generateSessionId();
+            console.log('Active session ID:', sessionId);
+
+            // Function to load conversation history
+            async function loadConversationHistory() {
+                try {
+                    const response = await fetch('/api/agent/conversations');
+                    if (!response.ok) {
+                        throw new Error('Failed to load conversations');
+                    }
+
+                    const data = await response.json();
+                    const conversationsList = document.getElementById('conversationsList');
+
+                    // Clear the loading message
+                    conversationsList.innerHTML = '';
+
+                    if (data.conversations && data.conversations.length > 0) {
+                        // Add each conversation to the list
+                        data.conversations.forEach(conv => {
+                            const formattedDate = new Date(conv.lastUpdated).toLocaleDateString();
+                            const isActive = conv.sessionId === sessionId;
+
+                            const listItem = document.createElement('li');
+                            listItem.className = `flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800 cursor-pointer ${
+                                isActive ? 'sidebar-item-active bg-gray-800' : ''
+                            }`;
+                            listItem.dataset.sessionId = conv.sessionId;
+
+                            listItem.innerHTML = `
+                                <i class="fas fa-comment text-gray-400"></i>
+                                <span class="sidebar-item-text flex-grow truncate">${conv.title}</span>
+                                <span class="text-xs text-gray-500">${formattedDate}</span>
+                            `;
+
+                            // Add click event to switch to this conversation
+                            listItem.addEventListener('click', () => switchConversation(conv.sessionId));
+
+                            conversationsList.appendChild(listItem);
+                        });
+                    } else {
+                        // No conversations found
+                        conversationsList.innerHTML = `
+                            <li class="flex items-center justify-center py-4 text-gray-400">
+                                <span class="text-xs">No conversations yet</span>
+                            </li>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('Error loading conversations:', error);
+                    document.getElementById('conversationsList').innerHTML = `
+                        <li class="flex items-center justify-center py-4 text-gray-400">
+                            <span class="text-xs">Error loading conversations</span>
+                        </li>
+                    `;
+                }
+            }
+
+            // Function to switch to a different conversation
+            async function switchConversation(newSessionId) {
+                if (newSessionId === sessionId) return; // Already on this conversation
+
+                // Update the active session ID
+                sessionId = newSessionId;
+                localStorage.setItem('virtra_session_id', sessionId);
+                console.log('Switched to session ID:', sessionId);
+
+                // Clear the chat display
+                chatDisplay.innerHTML = '';
+
+                // Show loading message
+                const loadingMsg = document.createElement('div');
+                loadingMsg.className = 'max-w-3xl mx-auto mb-6 text-center text-gray-400';
+                loadingMsg.innerHTML = '<div class="inline-block animate-pulse">Loading conversation...</div>';
+                chatDisplay.appendChild(loadingMsg);
+
+                try {
+                    // Load the conversation memory
+                    const response = await fetch(`/api/agent/memory?sessionId=${sessionId}`);
+                    const data = await response.json();
+
+                    // Remove loading message
+                    chatDisplay.removeChild(loadingMsg);
+
+                    // Display the messages
+                    if (data.messages && data.messages.length > 0) {
+                        data.messages.forEach(msg => {
+                            addMessage(msg.text, msg.role === 'user');
+                        });
+                    } else {
+                        // No messages in this conversation yet
+                        addMessage('This is the start of your conversation. How can I help you today?', false);
+                    }
+
+                    // Update the active conversation in the sidebar
+                    loadConversationHistory();
+                } catch (error) {
+                    console.error('Error loading conversation memory:', error);
+                    chatDisplay.removeChild(loadingMsg);
+                    addMessage('Error loading conversation. Please try again.', false);
+                }
+            }
+
+            // Function to start a new conversation
+            function startNewConversation() {
+                // Generate a new session ID
+                sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+                localStorage.setItem('virtra_session_id', sessionId);
+                console.log('Started new conversation with session ID:', sessionId);
+
+                // Clear the chat display
+                chatDisplay.innerHTML = '';
+
+                // Add welcome message
+                addMessage('This is the start of a new conversation. How can I help you today?', false);
+
+                // Update the conversation list
+                loadConversationHistory();
+            }
+
+            // Add event listeners to the new chat buttons
+            document.getElementById('newChatButton').addEventListener('click', startNewConversation);
+            document.getElementById('newChatButtonCollapsed').addEventListener('click', startNewConversation);
 
             let uploadedImages = [];
             let mediaRecorder;
@@ -808,7 +926,8 @@
                             },
                             body: JSON.stringify({
                                 message: text,
-                                context: { generateSpeech: true }
+                                sessionId: sessionId,
+                                context: { generateSpeech: true, sessionId: sessionId }
                             })
                         });
 
@@ -921,7 +1040,8 @@
                                         },
                                         body: JSON.stringify({
                                             transcription: transcribeData.text,
-                                            context: { generateSpeech: true }
+                                            sessionId: sessionId,
+                                            context: { generateSpeech: true, sessionId: sessionId }
                                         })
                                     });
 
@@ -968,8 +1088,29 @@
                 }
             });
 
+            // Load conversation history
+            loadConversationHistory();
+
             // Add a welcome message with TTS
             setTimeout(async () => {
+                // Check if we need to load existing conversation or show welcome message
+                try {
+                    // Try to load the current conversation memory
+                    const memoryResponse = await fetch(`/api/agent/memory?sessionId=${sessionId}`);
+                    const memoryData = await memoryResponse.json();
+
+                    if (memoryData.messages && memoryData.messages.length > 0) {
+                        // We have existing messages, display them
+                        memoryData.messages.forEach(msg => {
+                            addMessage(msg.text, msg.role === 'user');
+                        });
+                        return; // Skip welcome message
+                    }
+                } catch (error) {
+                    console.error('Error checking conversation memory:', error);
+                    // Continue with welcome message
+                }
+
                 // Show a loading message first
                 const loadingMsg = document.createElement('div');
                 loadingMsg.className = 'max-w-3xl mx-auto mb-6 text-center text-gray-400';
@@ -985,7 +1126,8 @@
                         },
                         body: JSON.stringify({
                             message: "__welcome__",
-                            context: { generateSpeech: true }
+                            sessionId: sessionId,
+                            context: { generateSpeech: true, sessionId: sessionId }
                         })
                     });
 
@@ -1067,7 +1209,8 @@
                             },
                             body: JSON.stringify({
                                 message: `__announce_persona_change__${selectedPersona}`,
-                                context: { generateSpeech: true }
+                                sessionId: sessionId,
+                                context: { generateSpeech: true, sessionId: sessionId }
                             })
                         });
 

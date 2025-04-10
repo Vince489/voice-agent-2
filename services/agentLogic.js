@@ -233,13 +233,6 @@ export async function processMessage(message, context = {}) {
     // Set the session ID if provided in the context
     if (context.sessionId && context.sessionId !== conversationMemory.sessionId) {
       await conversationMemory.setSessionId(context.sessionId);
-      console.log(`Set conversation memory session ID to: ${context.sessionId}`);
-    }
-
-    // Set the session ID if provided in the context
-    if (context.sessionId && context.sessionId !== conversationMemory.sessionId) {
-      await conversationMemory.setSessionId(context.sessionId);
-      console.log(`Set conversation memory session ID to: ${context.sessionId}`);
     }
 
     // Special commands for memory management and persona switching

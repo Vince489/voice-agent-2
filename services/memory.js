@@ -31,7 +31,11 @@ export class HybridConversationMemory {
         this.messages = [];
         this.embeddingModel = options.embeddingModel;
         this.sessionId = options.sessionId || 'default-session';
+
+        // Check MongoDB connection status
         this.isMongoConnected = mongoose.connection.readyState === 1;
+        console.log(`Memory constructor - MongoDB connection status: ${this.isMongoConnected ? 'Connected' : 'Not connected'}`);
+        console.log(`MongoDB readyState: ${mongoose.connection.readyState}`);
 
         // Load conversation history from MongoDB if connected
         if (this.isMongoConnected) {
@@ -66,9 +70,14 @@ export class HybridConversationMemory {
      * @private
      */
     async _saveToMongoDB() {
-        if (!this.isMongoConnected) return;
+        if (!this.isMongoConnected) {
+            console.log('MongoDB not connected, skipping save');
+            return;
+        }
 
         try {
+            console.log(`Attempting to save ${this.messages.length} messages to MongoDB for session ${this.sessionId}`);
+
             // Find or create conversation document
             const result = await Conversation.findOneAndUpdate(
                 { sessionId: this.sessionId },
@@ -79,7 +88,8 @@ export class HybridConversationMemory {
                 { upsert: true, new: true }
             );
 
-            console.log(`Saved ${this.messages.length} messages to MongoDB for session ${this.sessionId}`);
+            console.log(`Successfully saved ${this.messages.length} messages to MongoDB for session ${this.sessionId}`);
+            console.log(`MongoDB document ID: ${result._id}`);
         } catch (error) {
             console.error('Error saving conversation to MongoDB:', error);
             // Continue even if saving fails
@@ -196,12 +206,43 @@ export class HybridConversationMemory {
     }
 
     /**
+     * Check if MongoDB is connected and update the connection status
+     * This should be called before any operation that requires MongoDB
+     * @returns {Promise<boolean>} - Whether MongoDB is connected
+     */
+    async checkMongoConnection() {
+        // Wait for MongoDB connection to be established
+        if (mongoose.connection.readyState === 0) {
+            console.log('MongoDB connection not yet established, waiting...');
+            // Wait for up to 5 seconds for the connection to be established
+            for (let i = 0; i < 10; i++) {
+                if (mongoose.connection.readyState === 1) {
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Update the connection status
+        this._updateMongoConnectionStatus();
+        console.log(`MongoDB connection check: ${this.isMongoConnected ? 'Connected' : 'Not connected'}`);
+        return Promise.resolve(this.isMongoConnected);
+    }
+
+    /**
      * Add a message to the conversation history
      * @param {Object} message - The message to add
      * @param {string} currentContext - The current context
      * @returns {Promise<void>}
      */
     async addMessage(message, currentContext) {
+        console.log(`Adding message to memory: ${message.role}: ${message.text.substring(0, 50)}...`);
+        console.log(`Current session ID: ${this.sessionId}`);
+
+        // Check MongoDB connection before trying to save
+        await this.checkMongoConnection();
+        console.log(`MongoDB connected: ${this.isMongoConnected}`);
+
         const messageSize = this._estimateMessageSize(message);
 
         if (this.messages.reduce((sum, m) => sum + this._estimateMessageSize(m), 0) + messageSize > this.maxSizeBytes) {
@@ -213,9 +254,13 @@ export class HybridConversationMemory {
             timestamp: Date.now()
         });
 
+        console.log(`Current memory size: ${this.messages.length} messages`);
+
         // Save to MongoDB after adding a message
         if (this.isMongoConnected) {
             await this._saveToMongoDB();
+        } else {
+            console.log('MongoDB not connected, skipping save in addMessage');
         }
     }
 
@@ -281,14 +326,33 @@ export class HybridConversationMemory {
     }
 
     /**
+     * Update MongoDB connection status
+     * @private
+     */
+    _updateMongoConnectionStatus() {
+        const wasConnected = this.isMongoConnected;
+        this.isMongoConnected = mongoose.connection.readyState === 1;
+
+        if (wasConnected !== this.isMongoConnected) {
+            console.log(`MongoDB connection status changed: ${this.isMongoConnected ? 'Connected' : 'Not connected'}`);
+        }
+
+        return this.isMongoConnected;
+    }
+
+    /**
      * Set the session ID and reload conversation history
      * @param {string} sessionId - The new session ID
      */
     async setSessionId(sessionId) {
         if (this.sessionId === sessionId) return;
 
+        console.log(`Set conversation memory session ID to: ${sessionId}`);
         this.sessionId = sessionId;
         this.messages = [];
+
+        // Check MongoDB connection before trying to load
+        await this.checkMongoConnection();
 
         if (this.isMongoConnected) {
             await this._loadFromMongoDB();

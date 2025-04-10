@@ -8,6 +8,7 @@ import express from 'express';
 import { processMessage, changePersona, currentPersonaId } from '../services/agentLogic.js';
 import { HybridConversationMemory } from '../services/memory.js';
 import { listPersonas } from '../services/personaLoader.js';
+import Conversation from '../models/conversation.js';
 
 const router = express.Router();
 
@@ -203,6 +204,58 @@ router.post('/personas/switch', async (req, res) => {
   } catch (error) {
     console.error('Error switching persona:', error);
     return res.status(500).json({ error: 'Error switching persona' });
+  }
+});
+
+/**
+ * GET /api/agent/conversations
+ * Get all conversation sessions
+ */
+router.get('/conversations', async (req, res) => {
+  try {
+    // Get all conversations from MongoDB, sorted by lastUpdated
+    const conversations = await Conversation.find({}).sort({ lastUpdated: -1 }).limit(20); // Limit to 20 most recent conversations
+
+    // Format the conversations for the client
+    const formattedConversations = conversations.map(conv => {
+      // Find the first user message to use as title
+      let title = 'New conversation';
+
+      if (conv.messages && conv.messages.length > 0) {
+        // Try to find the first user message
+        const userMessage = conv.messages.find(msg => msg.role === 'user');
+        if (userMessage) {
+          title = userMessage.text;
+        } else {
+          // If no user message, use the first message regardless of role
+          title = conv.messages[0].text;
+        }
+
+        // Truncate the title if it's too long
+        if (title.length > 30) {
+          title = title.substring(0, 27) + '...';
+        }
+      }
+
+      return {
+        id: conv._id,
+        sessionId: conv.sessionId,
+        title: title,
+        lastUpdated: conv.lastUpdated,
+        messageCount: conv.messages ? conv.messages.length : 0
+      };
+    });
+
+    return res.json({
+      conversations: formattedConversations
+    });
+  } catch (error) {
+    console.error('Error retrieving conversations:', error);
+    return res.status(500).json({
+      error: 'Error retrieving conversations',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
