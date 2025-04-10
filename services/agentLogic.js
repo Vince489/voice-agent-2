@@ -274,6 +274,64 @@ export async function processMessage(message, context = {}) {
       };
     }
 
+    // Command to announce persona change with TTS
+    if (message.startsWith('__announce_persona_change__')) {
+      const personaId = message.split('__')[2];
+      if (personaId) {
+        const persona = await loadPersona(personaId);
+        const personaName = persona.metadata.name;
+
+        // Create a friendly announcement message
+        let announcementText;
+
+        switch (personaId) {
+          case 'professional':
+            announcementText = `I've switched to my Professional persona. I'll be more formal and business-oriented in my responses now.`;
+            break;
+          case 'casual':
+            announcementText = `I've switched to my Casual persona. I'll be more relaxed and conversational in my responses now.`;
+            break;
+          case 'default':
+            announcementText = `I've switched to my Default persona. I'll be friendly and professional in my responses now.`;
+            break;
+          default:
+            announcementText = `I've switched to the ${personaName} persona. My personality and tone will reflect this change.`;
+        }
+
+        return {
+          text: announcementText,
+          generateSpeech: true
+        };
+      }
+    }
+
+    // Handle welcome message
+    if (message === '__welcome__') {
+      // Get the current persona to customize the welcome message
+      const persona = await loadPersona(currentPersonaId);
+      const personaName = persona.metadata.name;
+
+      // Create a welcome message based on the current persona
+      let welcomeText;
+
+      switch (currentPersonaId) {
+        case 'professional':
+          welcomeText = `Welcome. I'm Virtra, your professional virtual assistant. I'm here to provide you with accurate and efficient assistance. How may I help you today?`;
+          break;
+        case 'casual':
+          welcomeText = `Hey there! I'm Virtra, your friendly AI assistant. I'm super excited to chat with you today! What can I help you with?`;
+          break;
+        case 'default':
+        default:
+          welcomeText = `Hello! I'm Virtra, your AI assistant. You can type a message, upload images, or use voice input. How can I help you today?`;
+      }
+
+      return {
+        text: welcomeText,
+        generateSpeech: true
+      };
+    }
+
     // If chat session is not initialized, initialize it
     if (!chatSession) {
       await initChatSession();

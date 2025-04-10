@@ -39,6 +39,19 @@ router.post('/chat', async (req, res) => {
     // Add sessionId to the response
     response.sessionId = sessionId;
 
+    // If we have an audio buffer but no URL, convert it to a data URL
+    if (response.audioBuffer && !response.audioUrl) {
+      console.log('Converting audio buffer to data URL for chat response, buffer size:', response.audioBuffer.length);
+
+      // Create a proper base64 encoding of the audio buffer
+      const base64Audio = Buffer.from(response.audioBuffer).toString('base64');
+      response.audioUrl = `data:audio/mp3;base64,${base64Audio}`;
+      console.log('Data URL created, length:', response.audioUrl.length);
+
+      // Remove the buffer from the response to reduce payload size
+      delete response.audioBuffer;
+    }
+
     // Return the response
     return res.json(response);
   } catch (error) {

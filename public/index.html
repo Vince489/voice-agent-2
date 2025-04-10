@@ -968,9 +968,52 @@
                 }
             });
 
-            // Add a welcome message
-            setTimeout(() => {
-                addMessage("Welcome to Virtra! You can type a message, upload images, or use voice input. How can I help you today?");
+            // Add a welcome message with TTS
+            setTimeout(async () => {
+                // Show a loading message first
+                const loadingMsg = document.createElement('div');
+                loadingMsg.className = 'max-w-3xl mx-auto mb-6 text-center text-gray-400';
+                loadingMsg.innerHTML = '<div class="inline-block animate-pulse">Initializing Virtra...</div>';
+                chatDisplay.appendChild(loadingMsg);
+
+                try {
+                    // Get a welcome message from the agent with TTS
+                    const response = await fetch('/api/agent/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: "__welcome__",
+                            context: { generateSpeech: true }
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    // Remove loading message
+                    chatDisplay.removeChild(loadingMsg);
+
+                    // Add the welcome message
+                    addMessage(data.text || "Welcome to Virtra! You can type a message, upload images, or use voice input. How can I help you today?");
+
+                    // Play audio if available
+                    if (data.audioUrl) {
+                        console.log('Playing welcome audio');
+                        const audio = new Audio(data.audioUrl);
+                        audio.play().catch(error => {
+                            console.error('Error playing welcome audio:', error);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error getting welcome message:', error);
+
+                    // Remove loading message
+                    chatDisplay.removeChild(loadingMsg);
+
+                    // Fallback welcome message
+                    addMessage("Welcome to Virtra! You can type a message, upload images, or use voice input. How can I help you today?");
+                }
             }, 500);
 
             // Persona switching functionality
@@ -1013,8 +1056,34 @@
                         // Update display
                         currentPersonaDisplay.textContent = selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1);
 
-                        // Add system message
-                        addMessage(`Switched to ${selectedPersona} persona. The AI's personality and tone will now reflect this change.`, 'system');
+                        // Add system message (without TTS)
+                        addMessage(`Switched to ${selectedPersona} persona. The AI's personality and tone will now reflect this change.`, false, [], 'system');
+
+                        // Also have Virtra announce the change with TTS
+                        const announceResponse = await fetch('/api/agent/chat', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                message: `__announce_persona_change__${selectedPersona}`,
+                                context: { generateSpeech: true }
+                            })
+                        });
+
+                        const announceData = await announceResponse.json();
+
+                        // Add Virtra's announcement
+                        addMessage(announceData.text);
+
+                        // Play audio if available
+                        if (announceData.audioUrl) {
+                            console.log('Playing audio for persona change announcement');
+                            const audio = new Audio(announceData.audioUrl);
+                            audio.play().catch(error => {
+                                console.error('Error playing audio:', error);
+                            });
+                        }
                     } else {
                         // Show error
                         currentPersonaDisplay.textContent = 'Error';
