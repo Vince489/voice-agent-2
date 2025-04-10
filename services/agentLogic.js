@@ -8,6 +8,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { synthesizeSpeech } from './textToSpeech.js';
 import { tools, executeTool } from './tools.js';
+import { HybridConversationMemory } from './memory.js';
 
 // Initialize the Google AI model
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
@@ -93,8 +94,14 @@ To search for information about current events or any topic requiring up-to-date
 
 After receiving the tool result, you can then formulate your response to the user. Do not simulate or make up search results - always use the internet_search tool to get real information.`;
 
-// Initialize chat session
+// Initialize chat session and memory
 let chatSession;
+
+// Create a conversation memory instance
+const conversationMemory = new HybridConversationMemory({
+  maxSizeBytes: 5 * 1024 * 1024, // 5MB
+  maxMessageCount: 20
+});
 
 /**
  * Initialize the chat session with the AI model
@@ -215,12 +222,40 @@ function cleanTextForTTS(text) {
   cleanedText = cleanedText.replace(/e\.g\./g, 'for example');
   cleanedText = cleanedText.replace(/i\.e\./g, 'that is');
 
+  // More aggressive cleaning to prevent TTS issues
+  // Remove all non-alphanumeric characters except basic punctuation
+  cleanedText = cleanedText.replace(/[^a-zA-Z0-9\s.,;:?!'"()-]/g, ' ');
+
+  // Fix multiple spaces
+  cleanedText = cleanedText.replace(/\s+/g, ' ');
+
+  // Remove spaces before punctuation
+  cleanedText = cleanedText.replace(/\s+([.,;:?!])/g, '$1');
+
+  // Ensure the text ends with proper punctuation
+  if (!/[.!?]\s*$/.test(cleanedText)) {
+    cleanedText = cleanedText.trim() + '.';
+  }
+
   return cleanedText;
 }
 
 export async function processMessage(message, context = {}) {
   try {
     console.log(`Processing message: "${message}"`);
+
+    // Special commands for memory management
+    if (message === '__get_memory__' && context.getMemoryOnly) {
+      return {
+        messages: conversationMemory.getAllMessages(),
+        count: conversationMemory.messages.length
+      };
+    }
+
+    if (message === '__clear_memory__' && context.clearMemory) {
+      conversationMemory.clear();
+      return { success: true, message: 'Memory cleared' };
+    }
 
     // If chat session is not initialized, initialize it
     if (!chatSession) {
@@ -235,8 +270,11 @@ export async function processMessage(message, context = {}) {
       inputType = 'image';
     }
 
-    // Create a message with context information - without including the time
-    const messageWithContext = `Input type: ${inputType}\nUser message: ${message}`;
+    // Get relevant conversation history
+    const conversationHistory = await conversationMemory.getRelevantContext(message);
+
+    // Create a message with context information including conversation history
+    const messageWithContext = `Input type: ${inputType}\n\nConversation History:\n${conversationHistory}\n\nUser message: ${message}`;
 
     // Send the message to the AI model
     const result = await chatSession.sendMessage(messageWithContext);
@@ -309,6 +347,17 @@ export async function processMessage(message, context = {}) {
     // Clean the reply for better TTS output
     const cleanedReply = cleanTextForTTS(reply);
 
+    // Add the interaction to conversation memory
+    await conversationMemory.addMessage({
+      role: 'user',
+      text: message
+    }, message);
+
+    await conversationMemory.addMessage({
+      role: 'assistant',
+      text: reply
+    }, message);
+
     // Generate speech if requested
     let audioBuffer = null;
     let audioUrl = null;
@@ -327,7 +376,8 @@ export async function processMessage(message, context = {}) {
       text: reply, // Return original text for display
       cleanedText: cleanedReply, // Also return cleaned text
       audioBuffer: audioBuffer,
-      audioUrl: audioUrl
+      audioUrl: audioUrl,
+      memorySize: conversationMemory.messages.length // Return memory size for debugging
     };
   } catch (error) {
     console.error('Error processing message:', error);
