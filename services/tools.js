@@ -97,6 +97,9 @@ async function performSearxNGSearch(args) {
 
   // List of SearXNG instances to try
   const searxngInstances = [
+    // Local Docker instance (primary)
+    'http://localhost:8080',
+    // Public fallback instances
     'https://search.mdosch.de',
     'https://search.disroot.org',
     'https://search.tiekoetter.com',
@@ -119,6 +122,16 @@ async function performSearxNGSearch(args) {
 
       if (!response.ok) {
         console.log(`SearXNG instance ${searxngInstance} returned status: ${response.status}`);
+
+        // Provide more detailed information for local Docker instance
+        if (searxngInstance.includes('localhost')) {
+          console.log('Local Docker SearXNG instance returned an error. This could be due to:');
+          console.log('1. The container might be having issues');
+          console.log('2. The instance might be rate-limited');
+          console.log('3. There might be a configuration issue');
+          console.log('Falling back to other search engines...');
+        }
+
         continue; // Try the next instance
       }
 
@@ -126,6 +139,56 @@ async function performSearxNGSearch(args) {
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         console.log(`SearXNG instance ${searxngInstance} returned non-JSON response: ${contentType}`);
+
+        // For local Docker instance, try to handle HTML responses
+        if (searxngInstance.includes('localhost')) {
+          console.log('Local Docker SearXNG instance returned HTML instead of JSON.');
+          console.log('This is likely because the instance is configured to return HTML by default.');
+          console.log('Trying to modify the URL to explicitly request JSON format...');
+
+          // Try again with explicit format=json parameter
+          if (!searchUrl.includes('format=json')) {
+            const separator = searchUrl.includes('?') ? '&' : '?';
+            const jsonUrl = `${searchUrl}${separator}format=json`;
+            console.log(`Retrying with URL: ${jsonUrl}`);
+
+            const jsonResponse = await fetch(jsonUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+              },
+              timeout: 5000
+            });
+
+            if (jsonResponse.ok && jsonResponse.headers.get('content-type')?.includes('application/json')) {
+              const jsonText = await jsonResponse.text();
+              try {
+                const jsonData = JSON.parse(jsonText);
+                if (jsonData && jsonData.results && jsonData.results.length > 0) {
+                  const results = jsonData.results.map(result => ({
+                    title: result.title,
+                    url: result.url,
+                    content: result.content || result.snippet || '',
+                    engine: result.engine,
+                    score: result.score || 1.0
+                  }));
+
+                  // Limit to top 5 results
+                  const limitedResults = results.slice(0, 5);
+
+                  return {
+                    results: limitedResults,
+                    query,
+                    number_of_results: limitedResults.length,
+                    answers: jsonData.answers || []
+                  };
+                }
+              } catch (e) {
+                console.log(`Failed to parse JSON from modified URL: ${e.message}`);
+              }
+            }
+          }
+        }
+
         continue; // Try the next instance
       }
 
@@ -150,10 +213,13 @@ async function performSearxNGSearch(args) {
           score: result.score || 1.0
         }));
 
+        // Limit to top 5 results
+        const limitedResults = results.slice(0, 5);
+
         return {
-          results,
+          results: limitedResults,
           query,
-          number_of_results: data.number_of_results || results.length,
+          number_of_results: limitedResults.length,
           answers: data.answers || []
         };
       }
@@ -208,10 +274,13 @@ async function performSearxNGSearch(args) {
       }
 
       if (results.length > 0) {
+        // Limit to top 5 results
+        const limitedResults = results.slice(0, 5);
+
         return {
-          results,
+          results: limitedResults,
           query,
-          number_of_results: results.length,
+          number_of_results: limitedResults.length,
           answers: []
         };
       }
