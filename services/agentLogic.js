@@ -178,6 +178,46 @@ function parseToolCall(text) {
  * @param {object} context - Additional context
  * @returns {Promise<object>} - The agent's response
  */
+/**
+ * Function to clean the AI's text response for better TTS
+ * @param {string} text - The AI's raw text response
+ * @returns {string} - The cleaned text
+ */
+function cleanTextForTTS(text) {
+  // Implement cleaning logic for better speech output
+  let cleanedText = text;
+
+  // Remove markdown formatting
+  cleanedText = cleanedText.replace(/\[.*?\]\(.*?\)/g, ''); // Remove markdown links
+  cleanedText = cleanedText.replace(/\*\*(.*?)\*\*/g, '$1'); // Remove bold markdown
+  cleanedText = cleanedText.replace(/\_(.*?)\_/g, '$1');   // Remove italic markdown
+  cleanedText = cleanedText.replace(/\`(.*?)\`/g, '$1');   // Remove code formatting
+
+  // Improve pronunciation of technical terms
+  cleanedText = cleanedText.replace(/n8n/gi, 'N eight N'); // Pronunciation help
+  cleanedText = cleanedText.replace(/Make \(formerly Integromat\)/gi, 'Make, formerly known as Integromat');
+
+  // Clean up URLs for better speech
+  cleanedText = cleanedText.replace(/https?:\/\/[^\s)]+/g, 'link'); // Replace URLs with 'link'
+  cleanedText = cleanedText.replace(/Source \d+: link/g, ''); // Remove source links
+
+  // Clean up search result formatting
+  cleanedText = cleanedText.replace(/--- Content from .* ---/g, 'According to this source:');
+  cleanedText = cleanedText.replace(/Source: .*/g, '');
+
+  // Remove any remaining special characters that might affect speech
+  cleanedText = cleanedText.replace(/\|/g, ', '); // Replace pipes with commas
+  cleanedText = cleanedText.replace(/\\n/g, ' '); // Replace literal \n with space
+  cleanedText = cleanedText.replace(/\\t/g, ' '); // Replace literal \t with space
+
+  // Fix common abbreviations for better speech
+  cleanedText = cleanedText.replace(/vs\./g, 'versus');
+  cleanedText = cleanedText.replace(/e\.g\./g, 'for example');
+  cleanedText = cleanedText.replace(/i\.e\./g, 'that is');
+
+  return cleanedText;
+}
+
 export async function processMessage(message, context = {}) {
   try {
     console.log(`Processing message: "${message}"`);
@@ -266,12 +306,16 @@ export async function processMessage(message, context = {}) {
       reply = followUpResponse.text();
     }
 
+    // Clean the reply for better TTS output
+    const cleanedReply = cleanTextForTTS(reply);
+
     // Generate speech if requested
     let audioBuffer = null;
     let audioUrl = null;
 
     if (context.generateSpeech) {
-      audioBuffer = await synthesizeSpeech(reply, context.voiceSettings);
+      // Use the cleaned text for speech synthesis
+      audioBuffer = await synthesizeSpeech(cleanedReply, context.voiceSettings);
 
       // If we have a URL from the TTS service, use it
       if (context.audioUrl) {
@@ -280,7 +324,8 @@ export async function processMessage(message, context = {}) {
     }
 
     return {
-      text: reply,
+      text: reply, // Return original text for display
+      cleanedText: cleanedReply, // Also return cleaned text
       audioBuffer: audioBuffer,
       audioUrl: audioUrl
     };
