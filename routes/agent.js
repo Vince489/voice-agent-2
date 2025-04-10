@@ -5,8 +5,9 @@
  */
 
 import express from 'express';
-import { processMessage } from '../services/agentLogic.js';
+import { processMessage, changePersona, currentPersonaId } from '../services/agentLogic.js';
 import { HybridConversationMemory } from '../services/memory.js';
+import { listPersonas } from '../services/personaLoader.js';
 
 const router = express.Router();
 
@@ -117,6 +118,57 @@ router.delete('/memory', async (req, res) => {
   } catch (error) {
     console.error('Error clearing conversation memory:', error);
     return res.status(500).json({ error: 'Error clearing conversation memory' });
+  }
+});
+
+/**
+ * GET /api/agent/personas
+ * Get a list of available personas
+ */
+router.get('/personas', async (req, res) => {
+  try {
+    const personas = await listPersonas();
+    return res.json({
+      personas,
+      currentPersona: currentPersonaId
+    });
+  } catch (error) {
+    console.error('Error retrieving personas:', error);
+    return res.status(500).json({ error: 'Error retrieving personas' });
+  }
+});
+
+/**
+ * GET /api/agent/personas/current
+ * Get the current persona
+ */
+router.get('/personas/current', async (req, res) => {
+  try {
+    const result = await processMessage('__get_persona__', { getPersonaInfo: true });
+    return res.json(result);
+  } catch (error) {
+    console.error('Error retrieving current persona:', error);
+    return res.status(500).json({ error: 'Error retrieving current persona' });
+  }
+});
+
+/**
+ * POST /api/agent/personas/switch
+ * Switch to a different persona
+ */
+router.post('/personas/switch', async (req, res) => {
+  try {
+    const { personaId } = req.body;
+
+    if (!personaId) {
+      return res.status(400).json({ error: 'Persona ID is required' });
+    }
+
+    const result = await processMessage(`__switch_persona__${personaId}__`, { allowPersonaSwitch: true });
+    return res.json(result);
+  } catch (error) {
+    console.error('Error switching persona:', error);
+    return res.status(500).json({ error: 'Error switching persona' });
   }
 });
 

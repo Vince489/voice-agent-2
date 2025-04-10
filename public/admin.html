@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtra Admin</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0f0f0f;
+            color: white;
+            font-family: 'Google Sans', 'Roboto', sans-serif;
+        }
+        .card {
+            background-color: #1f1f1f;
+            border-radius: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .gradient-text {
+            background: linear-gradient(90deg, #8ab4f8 0%, #f28b82 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, #8ab4f8 0%, #f28b82 100%);
+            color: white;
+            transition: opacity 0.2s;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+        .btn-secondary {
+            background-color: #2d2d2d;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .btn-secondary:hover {
+            background-color: #3d3d3d;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-12 text-center">
+            <h1 class="text-4xl font-bold mb-2">
+                <span class="gradient-text">Virtra Admin</span>
+            </h1>
+            <p class="text-gray-400">Manage personas and settings</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+            <div class="card p-6">
+                <h2 class="text-2xl font-bold mb-4">Persona Management</h2>
+                <p class="text-gray-400 mb-6">Switch between different personas to test variations in Virtra's personality and behavior.</p>
+                
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-2">Current Persona</h3>
+                    <div class="bg-gray-800 p-4 rounded-lg mb-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-user-circle text-blue-400 text-2xl mr-3"></i>
+                            <div>
+                                <div id="currentPersonaName" class="font-medium">Loading...</div>
+                                <div id="currentPersonaDesc" class="text-sm text-gray-400">Loading persona information...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Available Personas</h3>
+                    <div id="personaList" class="space-y-3 mb-6">
+                        <div class="animate-pulse bg-gray-800 p-4 rounded-lg">
+                            <div class="h-5 bg-gray-700 rounded w-1/3 mb-2"></div>
+                            <div class="h-4 bg-gray-700 rounded w-2/3"></div>
+                        </div>
+                        <div class="animate-pulse bg-gray-800 p-4 rounded-lg">
+                            <div class="h-5 bg-gray-700 rounded w-1/3 mb-2"></div>
+                            <div class="h-4 bg-gray-700 rounded w-2/3"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end">
+                    <a href="/" class="btn-secondary px-4 py-2 rounded-lg mr-2">
+                        <i class="fas fa-arrow-left mr-2"></i>Back to Chat
+                    </a>
+                    <button id="refreshPersonas" class="btn-primary px-4 py-2 rounded-lg">
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <div class="card p-6">
+                <h2 class="text-2xl font-bold mb-4">System Status</h2>
+                <p class="text-gray-400 mb-6">Monitor the status of Virtra's components and services.</p>
+                
+                <div class="space-y-4 mb-6">
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-brain text-green-400 mr-3"></i>
+                            <span>AI Model</span>
+                        </div>
+                        <span class="px-2 py-1 bg-green-900 text-green-300 rounded-full text-xs">Online</span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-search text-green-400 mr-3"></i>
+                            <span>SearXNG Search</span>
+                        </div>
+                        <span class="px-2 py-1 bg-green-900 text-green-300 rounded-full text-xs">Online</span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-microphone text-green-400 mr-3"></i>
+                            <span>Speech Recognition</span>
+                        </div>
+                        <span class="px-2 py-1 bg-green-900 text-green-300 rounded-full text-xs">Online</span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-volume-up text-green-400 mr-3"></i>
+                            <span>Text-to-Speech</span>
+                        </div>
+                        <span class="px-2 py-1 bg-green-900 text-green-300 rounded-full text-xs">Online</span>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end">
+                    <button id="checkStatus" class="btn-primary px-4 py-2 rounded-lg">
+                        <i class="fas fa-sync-alt mr-2"></i>Check Status
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="text-center text-gray-500 text-sm">
+            <p>Virtra Admin Panel &copy; 2023 Virtron Labs</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Load personas
+            await loadPersonas();
+            
+            // Add event listeners
+            document.getElementById('refreshPersonas').addEventListener('click', loadPersonas);
+            document.getElementById('checkStatus').addEventListener('click', checkSystemStatus);
+        });
+        
+        async function loadPersonas() {
+            try {
+                // Fetch personas from API
+                const response = await fetch('/api/agent/personas');
+                const data = await response.json();
+                
+                // Update current persona display
+                const currentPersona = data.personas.find(p => p.id === data.currentPersona);
+                if (currentPersona) {
+                    document.getElementById('currentPersonaName').textContent = currentPersona.name;
+                    document.getElementById('currentPersonaDesc').textContent = currentPersona.description;
+                }
+                
+                // Clear and rebuild persona list
+                const personaList = document.getElementById('personaList');
+                personaList.innerHTML = '';
+                
+                data.personas.forEach(persona => {
+                    const personaCard = document.createElement('div');
+                    personaCard.className = 'bg-gray-800 p-4 rounded-lg flex justify-between items-center';
+                    
+                    const isActive = persona.id === data.currentPersona;
+                    
+                    personaCard.innerHTML = `
+                        <div>
+                            <div class="font-medium">${persona.name}</div>
+                            <div class="text-sm text-gray-400">${persona.description}</div>
+                        </div>
+                        <button class="switch-persona-btn ${isActive ? 'opacity-50 cursor-not-allowed' : ''}" 
+                                data-persona-id="${persona.id}" 
+                                ${isActive ? 'disabled' : ''}>
+                            ${isActive ? 
+                                '<span class="px-2 py-1 bg-blue-900 text-blue-300 rounded-full text-xs">Active</span>' : 
+                                '<span class="px-2 py-1 bg-gray-700 text-gray-300 rounded-full text-xs hover:bg-gray-600">Activate</span>'}
+                        </button>
+                    `;
+                    
+                    personaList.appendChild(personaCard);
+                });
+                
+                // Add event listeners to switch buttons
+                document.querySelectorAll('.switch-persona-btn').forEach(btn => {
+                    if (!btn.disabled) {
+                        btn.addEventListener('click', async () => {
+                            const personaId = btn.getAttribute('data-persona-id');
+                            await switchPersona(personaId);
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading personas:', error);
+                alert('Error loading personas. Please try again.');
+            }
+        }
+        
+        async function switchPersona(personaId) {
+            try {
+                // Show loading state
+                document.getElementById('currentPersonaName').textContent = 'Switching...';
+                document.getElementById('currentPersonaDesc').textContent = 'Please wait while the persona is being changed';
+                
+                // Send request to switch persona
+                const response = await fetch('/api/agent/personas/switch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ personaId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Reload personas to update UI
+                    await loadPersonas();
+                } else {
+                    alert(`Failed to switch persona: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error switching persona:', error);
+                alert('Error switching persona. Please try again.');
+            }
+        }
+        
+        function checkSystemStatus() {
+            // This would normally check the actual status of each component
+            // For now, we'll just show a notification
+            alert('All systems operational');
+        }
+    </script>
+</body>
+</html>

@@ -47,6 +47,19 @@
             50% { opacity: 1; }
             100% { opacity: 0.7; }
         }
+
+        /* System message styling */
+        .system-message {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            max-width: 80%;
+            margin: 0 auto;
+            transition: opacity 0.3s ease;
+        }
+
+        .system-message:hover {
+            opacity: 1;
+        }
         .gradient-text {
             background: linear-gradient(90deg, #8ab4f8 0%, #f28b82 100%);
             -webkit-background-clip: text;
@@ -335,6 +348,22 @@
                 </li>
             </ul>
 
+            <div class="mt-6 text-xs text-gray-400 px-2">Personas</div>
+            <ul class="mt-2 space-y-1 px-2 text-sm">
+                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800">
+                    <i class="fas fa-user-circle text-gray-400"></i>
+                    <span class="sidebar-item-text">Current: <span id="currentPersona">Default</span></span>
+                </li>
+                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800">
+                    <i class="fas fa-exchange-alt text-gray-400"></i>
+                    <select id="personaSelector" class="bg-gray-800 text-white text-sm rounded px-2 py-1 w-full">
+                        <option value="default">Default Virtra</option>
+                        <option value="professional">Professional Virtra</option>
+                        <option value="casual">Casual Virtra</option>
+                    </select>
+                </li>
+            </ul>
+
             <div class="mt-6 text-xs text-gray-400 px-2">Gems</div>
             <ul class="mt-2 space-y-1 px-2 text-sm">
                 <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800">
@@ -354,6 +383,12 @@
                     <i class="fas fa-cog text-gray-400"></i>
                     <span class="sidebar-item-text">Settings</span>
                     <span class="dot-indicator"></span>
+                </li>
+                <li class="flex items-center gap-2 text-white px-2 py-2 rounded hover:bg-gray-800">
+                    <a href="/admin.html" class="flex items-center gap-2 w-full">
+                        <i class="fas fa-user-cog text-gray-400"></i>
+                        <span class="sidebar-item-text">Admin Panel</span>
+                    </a>
                 </li>
             </ul>
 
@@ -636,11 +671,17 @@
             }
 
             // Add a message to the chat display
-            function addMessage(text, isUser = false, images = []) {
+            function addMessage(text, isUser = false, images = [], messageType = 'normal') {
                 const messageContainer = document.createElement('div');
                 messageContainer.className = 'max-w-3xl mx-auto mb-6';
 
-                if (isUser) {
+                if (messageType === 'system') {
+                    // System message (for notifications, persona changes, etc.)
+                    const systemMessage = document.createElement('div');
+                    systemMessage.className = 'system-message text-center py-2 px-4 bg-gray-800 text-gray-300 rounded-lg';
+                    systemMessage.innerHTML = `<i class="fas fa-info-circle mr-2"></i>${text}`;
+                    messageContainer.appendChild(systemMessage);
+                } else if (isUser) {
                     // User message
                     const userBubble = document.createElement('div');
                     userBubble.className = 'user-bubble ml-12 mr-0 user-message';
@@ -931,6 +972,64 @@
             setTimeout(() => {
                 addMessage("Welcome to Virtra! You can type a message, upload images, or use voice input. How can I help you today?");
             }, 500);
+
+            // Persona switching functionality
+            const personaSelector = document.getElementById('personaSelector');
+            const currentPersonaDisplay = document.getElementById('currentPersona');
+
+            // Load current persona on page load
+            async function loadCurrentPersona() {
+                try {
+                    const response = await fetch('/api/agent/personas/current');
+                    if (response.ok) {
+                        const data = await response.json();
+                        currentPersonaDisplay.textContent = data.currentPersona.charAt(0).toUpperCase() + data.currentPersona.slice(1);
+                        personaSelector.value = data.currentPersona;
+                    }
+                } catch (error) {
+                    console.error('Error loading current persona:', error);
+                }
+            }
+
+            // Handle persona selection
+            personaSelector.addEventListener('change', async () => {
+                const selectedPersona = personaSelector.value;
+                try {
+                    // Show loading state
+                    currentPersonaDisplay.textContent = 'Switching...';
+
+                    // Send request to switch persona
+                    const response = await fetch('/api/agent/personas/switch', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ personaId: selectedPersona })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // Update display
+                        currentPersonaDisplay.textContent = selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1);
+
+                        // Add system message
+                        addMessage(`Switched to ${selectedPersona} persona. The AI's personality and tone will now reflect this change.`, 'system');
+                    } else {
+                        // Show error
+                        currentPersonaDisplay.textContent = 'Error';
+                        console.error('Error switching persona:', data.error);
+                        addMessage(`Failed to switch persona: ${data.error}`, 'system');
+                    }
+                } catch (error) {
+                    console.error('Error switching persona:', error);
+                    currentPersonaDisplay.textContent = 'Error';
+                    addMessage('Failed to switch persona due to a network error.', 'system');
+                }
+            });
+
+            // Load current persona on page load
+            loadCurrentPersona();
         });
     </script>
 </body>

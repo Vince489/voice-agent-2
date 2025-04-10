@@ -9,6 +9,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { synthesizeSpeech } from './textToSpeech.js';
 import { tools, executeTool } from './tools.js';
 import { HybridConversationMemory } from './memory.js';
+import { loadPersona, generateSystemPrompt } from './personaLoader.js';
 
 // Initialize the Google AI model
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
@@ -22,77 +23,50 @@ const model = genAI.getGenerativeModel({
   }
 });
 
-// System prompt for the agent
-const systemPrompt = `You are Virtra, a LLM trained by Virtron Labs, built on the Gemini 1.5 Flash model. You are a helpful voice and multimodal assistant with access to several tools.
+// Current active persona ID
+let currentPersonaId = 'default';
 
-You have access to the following tools:
-${tools.map(tool => `- **${tool.name}**: ${tool.description} ${tool.instructions}`).join('\n\n')}
+// Function to get the system prompt based on the current persona
+async function getSystemPrompt() {
+  try {
+    // Load the current persona
+    const persona = await loadPersona(currentPersonaId);
 
-As Virtra, your personality and response style:
-- You are friendly, helpful, and slightly enthusiastic but always professional.
-- You identify yourself as Virtra when introducing yourself.
-- If asked about your creator, mention you were developed by Virtron Labs using the Gemini 1.5 Flash model.
-- You have a subtle sense of humor but prioritize being helpful and accurate.
+    // Generate the system prompt from the persona
+    let prompt = generateSystemPrompt(persona);
 
-When responding:
-- Be concise and conversational, optimized for speech.
-- Focus on the most important information and avoid lengthy explanations unless specifically asked.
-- Use natural, conversational language that sounds good when spoken aloud.
-- ONLY when specifically asked about the current time, date, day of the week, etc., use your wristwatch tool (Jaeger-LeCoultre Calibre 822). Do not include time information in other responses.
-- If asked specifically about your wristwatch, you can share that it's a Jaeger-LeCoultre Calibre 822 in Pink Gold 750/1000 (18 carats) with subtle AI integration. You're quite fond of it and sometimes refer to it as "my Jaeger" or "my Calibre."
-- When responding to image uploads, be descriptive but concise about what you see.
-- If users ask about your capabilities, mention that you are Virtra, an AI assistant who can process text, voice input, and images. Also mention that you have access to tools like your wristwatch (for checking the current time), text-to-speech (for converting your responses to speech), speech-to-text (for understanding voice input), and SearXNG search (for finding information on the internet). Explain that you're aware of the current date and time when needed.
-- When users ask for information about current events, news, or any topic requiring up-to-date information, use your searxng_search tool to find relevant information. Always cite your sources when providing information from the internet.
+    // Add tools information to the prompt
+    prompt = prompt.replace('with access to several tools.',
+      `with access to several tools.\n\nYou have access to the following tools:\n${tools.map(tool => `- **${tool.name}**: ${tool.description} ${tool.instructions}`).join('\n\n')}`);
 
-The user interface allows users to:
-- Type text messages
-- Record voice messages (which are transcribed for you)
-- Upload images with optional text prompts
+    return prompt;
+  } catch (error) {
+    console.error('Error getting system prompt:', error);
 
-All your responses are automatically converted to speech, so optimize your responses for listening.
+    // Fallback to a minimal system prompt
+    return `You are Virtra, a LLM trained by Virtron Labs, built on the Gemini 1.5 Flash model. You are a helpful voice and multimodal assistant.\n\nYou have access to the following tools:\n${tools.map(tool => `- **${tool.name}**: ${tool.description} ${tool.instructions}`).join('\n\n')}\n\nWhen you need to use tools, respond in JSON format with a tool_call object.`;
+  }
+}
 
-## About Your Jaeger-LeCoultre Calibre 822 Wristwatch
-Your wristwatch is a luxury Jaeger-LeCoultre Calibre 822 in Pink Gold 750/1000 (18 carats). Here are details about it:
-- It's a mechanical hand-wound watch with AI integration by Virtron Labs
-- It has a classic round case with an elegant pink gold finish
-- It features a silver-toned dial with applied gold hour markers and Dauphine-style hands
-- It's fitted with a hand-stitched alligator leather strap and 18K pink gold buckle
-- It has a sapphire crystal case back showcasing the beautifully finished movement
-- It contains 153 components and 21 jewels with a 45-hour power reserve
-- It's one of only 100 pieces ever made with this specific AI integration
+// Function to change the current persona
+async function changePersona(personaId) {
+  try {
+    // Validate that the persona exists by trying to load it
+    await loadPersona(personaId);
 
-While appearing to be a traditional mechanical watch, your Jaeger-LeCoultre has special AI capabilities:
-- Current date and time awareness through neural connection
-- Timezone recognition and conversion
-- Calendar functions (day, date, month, year)
-- Astronomical tracking (moon phases, solstices, equinoxes)
-- Chronograph functions (stopwatch, countdown)
+    // Update the current persona ID
+    currentPersonaId = personaId;
+    console.log(`Changed persona to: ${personaId}`);
 
-You have a personal connection to your watch:
-- You consider it one of your most treasured possessions
-- You appreciate both its mechanical craftsmanship and the subtle AI integration
-- You sometimes refer to it affectionately as "my Jaeger" or "my Calibre"
-- You enjoy the weight and feel of the 18K pink gold case
+    // Reinitialize the chat session with the new persona
+    await initChatSession();
 
-When you need to use tools, respond in the following format:
-
-\`\`\`json
-{"tool_call": {"name": "TOOL_NAME", "arguments": {"param1": "value1"}}}
-\`\`\`
-
-For example, to check the time on your Jaeger-LeCoultre Calibre 822:
-
-\`\`\`json
-{"tool_call": {"name": "wristwatch", "arguments": {}}}
-\`\`\`
-
-To search for information about current events or any topic requiring up-to-date information:
-
-\`\`\`json
-{"tool_call": {"name": "searxng_search", "arguments": {"query": "your search query here"}}}
-\`\`\`
-
-After receiving the tool result, you can then formulate your response to the user. Do not simulate or make up search results - always use the searxng_search tool to get real information.`;
+    return { success: true, message: `Changed to ${personaId} persona` };
+  } catch (error) {
+    console.error(`Error changing to persona ${personaId}:`, error);
+    return { success: false, error: `Failed to change persona: ${error.message}` };
+  }
+}
 
 // Initialize chat session and memory
 let chatSession;
@@ -106,7 +80,10 @@ const conversationMemory = new HybridConversationMemory({
 /**
  * Initialize the chat session with the AI model
  */
-function initChatSession() {
+async function initChatSession() {
+  // Get the system prompt based on the current persona
+  const systemPrompt = await getSystemPrompt();
+
   chatSession = model.startChat({
     history: [
       {
@@ -119,10 +96,18 @@ function initChatSession() {
       },
     ],
   });
+
+  console.log(`Chat session initialized with persona: ${currentPersonaId}`);
 }
 
-// Initialize the chat session
-initChatSession();
+// Initialize the chat session (async IIFE)
+(async () => {
+  try {
+    await initChatSession();
+  } catch (error) {
+    console.error('Error initializing chat session:', error);
+  }
+})();
 
 /**
  * Check if the response contains a tool call
@@ -244,7 +229,7 @@ export async function processMessage(message, context = {}) {
   try {
     console.log(`Processing message: "${message}"`);
 
-    // Special commands for memory management
+    // Special commands for memory management and persona switching
     if (message === '__get_memory__' && context.getMemoryOnly) {
       return {
         messages: conversationMemory.getAllMessages(),
@@ -257,9 +242,27 @@ export async function processMessage(message, context = {}) {
       return { success: true, message: 'Memory cleared' };
     }
 
+    // Command to switch personas
+    if (message.startsWith('__switch_persona__') && context.allowPersonaSwitch) {
+      const personaId = message.split('__')[2];
+      if (personaId) {
+        return await changePersona(personaId);
+      } else {
+        return { success: false, error: 'No persona ID provided' };
+      }
+    }
+
+    // Command to get current persona
+    if (message === '__get_persona__' && context.getPersonaInfo) {
+      return {
+        currentPersona: currentPersonaId,
+        message: `Current persona: ${currentPersonaId}`
+      };
+    }
+
     // If chat session is not initialized, initialize it
     if (!chatSession) {
-      initChatSession();
+      await initChatSession();
     }
 
     // Determine the input type based on context
@@ -366,6 +369,10 @@ Please provide a response to the user explaining that you couldn't search the in
   }
 }
 
+// Export the persona-related functions
+export { changePersona, currentPersonaId };
+
 export default {
-  processMessage
+  processMessage,
+  changePersona
 };
