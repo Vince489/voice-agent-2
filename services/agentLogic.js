@@ -97,10 +97,11 @@ After receiving the tool result, you can then formulate your response to the use
 // Initialize chat session and memory
 let chatSession;
 
-// Create a conversation memory instance
+// Create a conversation memory instance with default session ID
 const conversationMemory = new HybridConversationMemory({
   maxSizeBytes: 5 * 1024 * 1024, // 5MB
-  maxMessageCount: 20
+  maxMessageCount: 20,
+  sessionId: 'default-session'
 });
 
 /**
@@ -244,16 +245,23 @@ export async function processMessage(message, context = {}) {
   try {
     console.log(`Processing message: "${message}"`);
 
+    // Set the session ID if provided in the context
+    if (context.sessionId && context.sessionId !== conversationMemory.sessionId) {
+      await conversationMemory.setSessionId(context.sessionId);
+      console.log(`Set conversation memory session ID to: ${context.sessionId}`);
+    }
+
     // Special commands for memory management
     if (message === '__get_memory__' && context.getMemoryOnly) {
       return {
         messages: conversationMemory.getAllMessages(),
-        count: conversationMemory.messages.length
+        count: conversationMemory.messages.length,
+        sessionId: conversationMemory.sessionId
       };
     }
 
     if (message === '__clear_memory__' && context.clearMemory) {
-      conversationMemory.clear();
+      await conversationMemory.clear();
       return { success: true, message: 'Memory cleared' };
     }
 
