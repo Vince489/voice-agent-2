@@ -4,26 +4,11 @@
  * Defines the tools available to the AI agent and provides functions for executing them.
  */
 
-// Import the enhanced search functionality and search tool
-import { performEnhancedSearch } from './enhancedSearch.js';
-import { executeSearch, searchTool } from './tools/searchTool.js';
+// Import only the necessary modules
+// No need for enhanced search or search tool imports
 
 // Define the tools available to the agent
 export const tools = [
-  // Internet search tool for Virtra
-  {
-    name: "internet_search",
-    description: "Search the internet for current information. Use this when you need to find up-to-date information about events, people, places, or concepts.",
-    instructions: "Use this tool when the user asks a question that requires current information or when you need to provide accurate, up-to-date facts about any topic. This tool searches the internet using a local SearXNG instance and retrieves comprehensive information from multiple sources.",
-    parameters: [
-      {
-        name: "query",
-        type: "string",
-        description: "The search query to execute",
-        required: true
-      }
-    ]
-  },
   {
     name: "wristwatch",
     description: "Your luxury Jaeger-LeCoultre Calibre 822 wristwatch in Pink Gold 750/1000 (18 carats). While appearing to be a traditional mechanical watch with a hand-wound movement, it has subtle AI integration by Virtron Labs that provides accurate time information. It features a classic round case with a silver-toned dial, gold hour markers, and a hand-stitched alligator leather strap.",
@@ -43,19 +28,7 @@ export const tools = [
       },
     ],
   },
-  {
-    name: "enhanced_search",
-    description: "Performs an advanced search that not only returns search results but also fetches and processes the content from the top results.",
-    instructions: "Use this tool when you need detailed information from multiple web sources on a topic. This tool will search for relevant pages and extract their main content, providing you with comprehensive information to answer complex questions.",
-    parameters: [
-      {
-        name: "query",
-        type: "string",
-        description: "The search query to use.",
-        required: true,
-      },
-    ],
-  },
+
   {
     name: "image_analysis",
     description: "Analyzes images uploaded by the user, allowing you to see and understand visual content.",
@@ -122,73 +95,138 @@ async function performSearxNGSearch(args) {
     return { error: "Search query cannot be empty." };
   }
 
+  // List of SearXNG instances to try
+  const searxngInstances = [
+    'https://search.mdosch.de',
+    'https://search.disroot.org',
+    'https://search.tiekoetter.com',
+    'https://search.rhscz.eu'
+  ];
+
+  // Try each instance until one works
+  for (const searxngInstance of searxngInstances) {
+    try {
+      const searchUrl = `${searxngInstance}/search?q=${encodeURIComponent(query)}&format=json`;
+      console.log(`Performing search for: ${query} using ${searchUrl}`);
+
+      // Make the request to the SearXNG instance
+      const response = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        },
+        timeout: 5000 // 5 second timeout
+      });
+
+      if (!response.ok) {
+        console.log(`SearXNG instance ${searxngInstance} returned status: ${response.status}`);
+        continue; // Try the next instance
+      }
+
+      // Check if the response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.log(`SearXNG instance ${searxngInstance} returned non-JSON response: ${contentType}`);
+        continue; // Try the next instance
+      }
+
+      const text = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.log(`Failed to parse JSON from ${searxngInstance}: ${parseError.message}`);
+        console.log(`Response starts with: ${text.substring(0, 50)}...`);
+        continue; // Try the next instance
+      }
+
+      if (data && data.results && data.results.length > 0) {
+        // Extract relevant information from the search results
+        const results = data.results.map(result => ({
+          title: result.title,
+          url: result.url,
+          content: result.content || result.snippet || '',
+          engine: result.engine,
+          score: result.score || 1.0
+        }));
+
+        return {
+          results,
+          query,
+          number_of_results: data.number_of_results || results.length,
+          answers: data.answers || []
+        };
+      }
+
+      console.log(`No results from ${searxngInstance}, trying next instance`);
+    } catch (error) {
+      console.error(`Error with ${searxngInstance}:`, error);
+      // Continue to the next instance
+    }
+  }
+
+  // If all instances fail, use web search fallbacks
   try {
-    // Try a different public SearXNG instance
-    const searxngInstance = 'https://search.mdosch.de';
-    const searchUrl = `${searxngInstance}/search?q=${encodeURIComponent(query)}&format=json`;
+    // Try DuckDuckGo as a fallback
+    console.log('All SearXNG instances failed, trying DuckDuckGo');
+    const duckduckgoUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`;
 
-    console.log(`Performing search for: ${query} using ${searchUrl}`);
-
-    // Make the request to the SearXNG instance
-    const response = await fetch(searchUrl, {
+    const response = await fetch(duckduckgoUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
     });
 
-    if (!response.ok) {
-      throw new Error(`SearXNG API returned status: ${response.status}`);
-    }
+    if (response.ok) {
+      const data = await response.json();
 
-    const data = await response.json();
+      // Extract results from DuckDuckGo response
+      const results = [];
 
-    if (data && data.results) {
-      // Extract relevant information from the search results
-      const results = data.results.map(result => ({
-        title: result.title,
-        url: result.url,
-        content: result.content || result.snippet || '',
-        engine: result.engine,
-        score: result.score || 1.0
-      }));
-
-      return {
-        results,
-        query,
-        number_of_results: data.number_of_results || results.length,
-        answers: data.answers || []
-      };
-    } else {
-      // Fallback to simulated results if no results are returned
-      console.log('No results from SearXNG, using fallback results');
-
-      const mockResults = [
-        {
-          title: `Information about ${query}`,
-          url: `https://example.com/search?q=${encodeURIComponent(query)}`,
-          content: `This is fallback content about ${query}. The local SearXNG instance didn't return any results.`,
-          engine: 'fallback',
+      if (data.AbstractURL && data.AbstractText) {
+        results.push({
+          title: data.Heading || 'DuckDuckGo Result',
+          url: data.AbstractURL,
+          content: data.AbstractText,
+          engine: 'duckduckgo',
           score: 1.0
-        }
-      ];
+        });
+      }
 
-      return {
-        results: mockResults,
-        query,
-        number_of_results: mockResults.length,
-        answers: [],
-        note: "These are fallback results. Your local SearXNG instance didn't return any results."
-      };
+      if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+        data.RelatedTopics.slice(0, 4).forEach(topic => {
+          if (topic.Text && topic.FirstURL) {
+            results.push({
+              title: topic.Text.split(' - ')[0] || 'Related Topic',
+              url: topic.FirstURL,
+              content: topic.Text,
+              engine: 'duckduckgo',
+              score: 0.8
+            });
+          }
+        });
+      }
+
+      if (results.length > 0) {
+        return {
+          results,
+          query,
+          number_of_results: results.length,
+          answers: []
+        };
+      }
     }
   } catch (error) {
-    console.error("Error performing SearXNG search:", error);
-    return {
-      error: `Failed to perform search: ${error.message}`,
-      query,
-      results: [],
-      number_of_results: 0
-    };
+    console.error('Error with DuckDuckGo fallback:', error);
   }
+
+  // If all else fails, return a helpful message
+  return {
+    error: `Unable to perform search for: ${query}. All search engines failed.`,
+    query,
+    results: [],
+    number_of_results: 0
+  };
 }
 
 /**
@@ -208,12 +246,6 @@ export async function executeTool(toolName, args = {}) {
 
     case "searxng_search":
       return performSearxNGSearch(args);
-
-    case "enhanced_search":
-      return performEnhancedSearch(args.query);
-
-    case "internet_search":
-      return executeSearch(args.query);
 
     // Other tools (image_analysis, text_to_speech, speech_to_text) are handled
     // automatically by the application flow, not directly called by the agent
